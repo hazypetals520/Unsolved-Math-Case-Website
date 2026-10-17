@@ -197,6 +197,19 @@ export function App() {
     setIsReportOpen(false);
   }, []);
 
+  const resetStudentExamState = useCallback(() => {
+    setCaseStatuses({});
+    setAttempts({});
+    setIsQuizFinished(false);
+    setIsReportOpen(false);
+    setActiveQuestion(null);
+    setIsAntiCheatOpen(false);
+    setPhase('desktop');
+    localStorage.setItem('unsolved_math_statuses', '{}');
+    localStorage.setItem('unsolved_math_attempts', '{}');
+    localStorage.setItem('unsolved_math_finished', 'false');
+  }, []);
+
   // Unified violation trigger with 1500ms cooldown to prevent multi-event duplicate triggers
   const triggerViolation = useCallback(
     (reason: string) => {
@@ -272,6 +285,80 @@ export function App() {
     }
   }, []);
 
+  useEffect(() => {
+    if (currentView === 'admin' || !profile?.presensiNumber) return;
+
+    const syncStudentStateFromServer = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/students/${profile.presensiNumber}/status`);
+        if (!res.ok) return;
+
+        const data = await res.json();
+        const serverAttempts = data.attempts || {};
+        const serverStatuses = data.caseStatuses || {};
+        const serverFinished = Boolean(data.isFinished);
+        const localHasProgress = Object.keys(attempts).length > 0 || Object.keys(caseStatuses).length > 0 || isQuizFinished;
+        const serverResetDetected =
+          Object.keys(serverAttempts).length === 0 &&
+          Object.keys(serverStatuses).length === 0 &&
+          !serverFinished &&
+          localHasProgress;
+
+        if (serverResetDetected) {
+          resetStudentExamState();
+          return;
+        }
+
+        if (data.isBlocked === false && isBlockedByViolation) {
+          setIsBlockedByViolation(false);
+          localStorage.setItem('unsolved_math_blocked', 'false');
+        }
+
+        if (
+          JSON.stringify(serverAttempts) !== JSON.stringify(attempts) ||
+          JSON.stringify(serverStatuses) !== JSON.stringify(caseStatuses) ||
+          Boolean(isQuizFinished) !== serverFinished
+        ) {
+          setAttempts(serverAttempts);
+          setCaseStatuses(serverStatuses);
+          setIsQuizFinished(serverFinished);
+          localStorage.setItem('unsolved_math_attempts', JSON.stringify(serverAttempts));
+          localStorage.setItem('unsolved_math_statuses', JSON.stringify(serverStatuses));
+          localStorage.setItem('unsolved_math_finished', String(serverFinished));
+        }
+      } catch {
+        // Backend offline or unreachable
+      }
+    };
+
+    syncStudentStateFromServer();
+    const interval = setInterval(syncStudentStateFromServer, 2000);
+
+    let channel: BroadcastChannel | null = null;
+    if (typeof BroadcastChannel !== 'undefined') {
+      channel = new BroadcastChannel('cyber_exam_channel');
+      channel.onmessage = (e) => {
+        const msg = e.data;
+        if (
+          msg === 'unblock' ||
+          msg === 'reset' ||
+          msg?.type === 'UNBLOCKED' ||
+          msg?.type === 'RESET'
+        ) {
+          if (msg === 'reset' || msg?.type === 'RESET') {
+            resetStudentExamState();
+          }
+          syncStudentStateFromServer();
+        }
+      };
+    }
+
+    return () => {
+      clearInterval(interval);
+      if (channel) channel.close();
+    };
+  }, [currentView, profile, attempts, caseStatuses, isQuizFinished, isBlockedByViolation, resetStudentExamState]);
+
   // Poll backend if blocked to automatically unblock when admin clicks 'Lepaskan'
   useEffect(() => {
     // NEVER run unblock polling or fullscreen triggers if user is in Admin view
@@ -296,7 +383,6 @@ export function App() {
             setIsAntiCheatOpen(false);
             setIsQuizFinished(Boolean(data.isFinished));
 
-            // Sync to localStorage
             localStorage.setItem('unsolved_math_violations', currentViolations.toString());
             localStorage.setItem('unsolved_math_blocked', 'false');
             localStorage.setItem('unsolved_math_finished', String(Boolean(data.isFinished)));
@@ -310,7 +396,6 @@ export function App() {
               localStorage.setItem('unsolved_math_attempts', JSON.stringify(data.attempts));
             }
 
-            // Only attempt fullscreen re-entry if this is an actual student tab (NOT admin)
             const isCurrentWindowAdmin =
               typeof window !== 'undefined' &&
               (window.location.hash.toLowerCase().includes('admin') ||
@@ -326,7 +411,6 @@ export function App() {
                       setIsUnblockedModalOpen(false);
                     })
                     .catch(() => {
-                      // Browser requires user gesture to enter fullscreen: prompt user with modal
                       setIsUnblockedModalOpen(true);
                     });
                 } else {
@@ -347,7 +431,6 @@ export function App() {
     checkStatus();
     const interval = setInterval(checkStatus, 2000);
 
-    // Also listen to BroadcastChannel
     let channel: BroadcastChannel | null = null;
     if (typeof BroadcastChannel !== 'undefined') {
       channel = new BroadcastChannel('cyber_exam_channel');
@@ -359,6 +442,9 @@ export function App() {
           msg?.type === 'UNBLOCKED' ||
           msg?.type === 'RESET'
         ) {
+          if (msg === 'reset' || msg?.type === 'RESET') {
+            resetStudentExamState();
+          }
           checkStatus();
         }
       };
@@ -368,7 +454,7 @@ export function App() {
       clearInterval(interval);
       if (channel) channel.close();
     };
-  }, [isBlockedByViolation, profile, currentView]);
+  }, [isBlockedByViolation, profile, currentView, resetStudentExamState]);
 
   // Security event listeners: active during desktop phase until all cases completed
   useEffect(() => {

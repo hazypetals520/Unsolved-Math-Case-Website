@@ -290,8 +290,8 @@ async function resetStudent(presensiNumber) {
 
   const now = new Date().toISOString();
 
-  // Reset only the exam state. Keep the student's block status and violation record
-  // intact so admin can still decide whether to release them later.
+  // Reset only exam progress. Keep violation data and block status intact to preserve
+  // the anti-cheat audit trail while allowing the student to begin again.
   await client.execute({
     sql: `
       UPDATE students

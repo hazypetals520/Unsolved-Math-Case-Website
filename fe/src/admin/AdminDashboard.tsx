@@ -527,6 +527,16 @@ export function AdminDashboard({ onBackToStudent }: AdminDashboardProps) {
                               </button>
                             ) : null}
 
+                            {/* Tombol Reset Ulang Jawaban Siswa */}
+                            <button
+                              onClick={() => handleReset(s.presensiNumber)}
+                              className="bg-amber-500 hover:bg-amber-400 text-black px-2 py-1 brutal-border brutal-shadow-sm font-bold text-[10.5px] uppercase flex items-center gap-1 cursor-pointer"
+                              title="Reset jawaban siswa agar mulai dari awal"
+                            >
+                              <RotateCw className="w-3.5 h-3.5" />
+                              <span>RESET</span>
+                            </button>
+
                             {/* Tombol Detail Rekap */}
                             <button
                               onClick={() => setSelectedStudent(s)}
