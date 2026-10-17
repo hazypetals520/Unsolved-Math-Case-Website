@@ -690,7 +690,7 @@ export const CaseModal: React.FC<CaseModalProps> = ({
         {/* ========================================================= */}
         {/* PERSISTENT BOTTOM ACTION BAR (ZERO SCROLL NEEDED!)        */}
         {/* ========================================================= */}
-        <div className="p-1.5 sm:p-2.5 bg-[#f4f1ea] border-t-2 sm:border-t-4 border-black shrink-0 flex items-center justify-between gap-1.5 sm:gap-2 z-20">
+        <div className="px-1.5 pt-1.5 pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-2.5 bg-[#f4f1ea] border-t-2 sm:border-t-4 border-black shrink-0 flex items-center justify-between gap-1.5 sm:gap-2 z-20">
           {!isChecked ? (
             <>
               <div className="text-[10px] sm:text-[11px] text-neutral-600 hidden sm:block">

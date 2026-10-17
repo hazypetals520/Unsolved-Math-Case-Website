@@ -136,6 +136,7 @@ export function App() {
 
   // Anti-cheat tracking refs
   const lastViolationTimeRef = useRef<number>(0);
+  const lastCaseAdvanceTimeRef = useRef<number>(0);
   const initialHeightRef = useRef<number>(window.innerHeight);
   const isFullscreenActiveRef = useRef<boolean>(false);
 
@@ -629,6 +630,10 @@ export function App() {
 
   // Next case handler to navigate directly to the next question
   const handleNextCase = (currentQuestionId: number) => {
+    const now = Date.now();
+    if (now - lastCaseAdvanceTimeRef.current < 800) return;
+    lastCaseAdvanceTimeRef.current = now;
+
     const currentIndex = QUIZ_QUESTIONS.findIndex((q) => q.id === currentQuestionId);
     if (currentIndex >= 0 && currentIndex < QUIZ_QUESTIONS.length - 1) {
       const nextQ = QUIZ_QUESTIONS[currentIndex + 1];
