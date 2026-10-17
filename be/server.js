@@ -110,6 +110,7 @@ app.get('/api/students/:presensiNumber/status', async (req, res) => {
       violationsCount: student.violationsCount,
       unblockedAt: student.unblockedAt,
       caseStatuses: student.caseStatuses,
+      attempts: student.attempts,
       isFinished: student.isFinished,
     });
   } catch (err) {

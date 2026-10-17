@@ -239,6 +239,7 @@ async function recordViolation(presensiNumber, reason) {
       SET violations_count = ?,
           violation_history = ?,
           is_blocked = ?,
+          unblocked_at = NULL,
           last_active_at = ?
       WHERE presensi_number = ?
     `,

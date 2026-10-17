@@ -185,22 +185,13 @@ export function App() {
     }
   }, [totalAttempted, isQuizFinished]);
 
-  // Auto-fail all remaining unopened questions when blocked
+  // Block access without changing the student's progress or completion state.
   const handleAutoBlock = useCallback(() => {
-    const failAll: Record<number, CaseStatus> = {};
-    QUIZ_QUESTIONS.forEach((q) => {
-      if (!caseStatuses[q.id] || caseStatuses[q.id] === 'unopened') {
-        failAll[q.id] = 'failed';
-      }
-    });
-    setCaseStatuses((prev) => ({ ...prev, ...failAll }));
     setIsBlockedByViolation(true);
     setActiveQuestion(null);
     setIsAntiCheatOpen(false);
     setIsReportOpen(false);
-    // Do NOT open FinalReportModal — blocked students should only see the blocked overlay,
-    // not explanations or correct answers. Report will be available after admin releases them.
-  }, [caseStatuses]);
+  }, []);
 
   // Unified violation trigger with 1500ms cooldown to prevent multi-event duplicate triggers
   const triggerViolation = useCallback(
@@ -276,21 +267,31 @@ export function App() {
         const res = await fetch(`${API_BASE}/students/${profile.presensiNumber}/status`);
         if (res.ok) {
           const data = await res.json();
-          if (data.isBlocked === false) {
+          if (
+            data.isBlocked === false &&
+            Number(data.violationsCount) >= 2 &&
+            data.unblockedAt
+          ) {
             console.log('[SECURITY] Student unblocked by administrator');
             setIsBlockedByViolation(false);
             const currentViolations = typeof data.violationsCount === 'number' ? data.violationsCount : 2;
             setViolationsCount(currentViolations);
             setIsReportOpen(false);
             setIsAntiCheatOpen(false);
+            setIsQuizFinished(Boolean(data.isFinished));
 
             // Sync to localStorage
             localStorage.setItem('unsolved_math_violations', currentViolations.toString());
             localStorage.setItem('unsolved_math_blocked', 'false');
+            localStorage.setItem('unsolved_math_finished', String(Boolean(data.isFinished)));
 
             if (data.caseStatuses) {
               setCaseStatuses(data.caseStatuses);
               localStorage.setItem('unsolved_math_statuses', JSON.stringify(data.caseStatuses));
+            }
+            if (data.attempts) {
+              setAttempts(data.attempts);
+              localStorage.setItem('unsolved_math_attempts', JSON.stringify(data.attempts));
             }
 
             // Only attempt fullscreen re-entry if this is an actual student tab (NOT admin)
