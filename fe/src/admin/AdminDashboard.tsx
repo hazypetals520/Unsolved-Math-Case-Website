@@ -10,7 +10,6 @@ import {
   Download, 
   Unlock, 
   Eye, 
-  Trash2, 
   Radio, 
   CheckCircle2, 
   Clock, 
@@ -119,49 +118,6 @@ export function AdminDashboard({ onBackToStudent }: AdminDashboardProps) {
     } catch (err) {
       console.error(err);
       showToast('Gagal membuka blokir: Backend tidak merespon');
-    }
-  };
-
-  // Reset student exam action
-  const handleResetStudent = async (presensiNumber: string) => {
-    try {
-      const res = await fetch(`${API_BASE}/students/${presensiNumber}/reset`, {
-        method: 'POST',
-      });
-      if (res.ok) {
-        const data = await res.json();
-        showToast(`Ujian siswa #${presensiNumber} telah direset.`);
-        if (typeof BroadcastChannel !== 'undefined') {
-          const channel = new BroadcastChannel('cyber_exam_channel');
-          channel.postMessage({ type: 'RESET', presensiNumber });
-          channel.close();
-        }
-        fetchStudents();
-        if (selectedStudent?.presensiNumber === presensiNumber && data.student) {
-          setSelectedStudent(data.student);
-        }
-      }
-    } catch (err) {
-      console.error(err);
-      showToast('Gagal mereset siswa: Backend tidak merespon');
-    }
-  };
-
-  // Clear all data
-  const handleClearAll = async () => {
-    if (!window.confirm('PERINGATAN: Yakin ingin MENGHAPUS SEMUA DATA SISWA untuk kelas baru? Data tidak dapat dipulihkan.')) {
-      return;
-    }
-    try {
-      const res = await fetch(`${API_BASE}/students/clear-all`, { method: 'POST' });
-      if (res.ok) {
-        showToast('Semua data siswa berhasil dibersihkan.');
-        fetchStudents();
-        setSelectedStudent(null);
-      }
-    } catch (err) {
-      console.error(err);
-      showToast('Gagal membersihkan data');
     }
   };
 
@@ -375,7 +331,7 @@ export function AdminDashboard({ onBackToStudent }: AdminDashboardProps) {
             </button>
           </div>
 
-          {/* Export & Reset Tools */}
+          {/* Export Tools */}
           <div className="flex items-center gap-2">
             <button
               onClick={handleExportCSV}
@@ -386,14 +342,6 @@ export function AdminDashboard({ onBackToStudent }: AdminDashboardProps) {
               <span>EXPORT CSV</span>
             </button>
 
-            <button
-              onClick={handleClearAll}
-              className="bg-white hover:bg-red-100 text-red-700 px-2.5 py-1.5 brutal-border brutal-shadow-sm font-bold text-xs uppercase flex items-center gap-1 cursor-pointer"
-              title="Kosongkan Semua Data Siswa"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              <span>BERSIHKAN</span>
-            </button>
           </div>
         </div>
 
@@ -560,18 +508,6 @@ export function AdminDashboard({ onBackToStudent }: AdminDashboardProps) {
                               <span>DETAIL</span>
                             </button>
 
-                            {/* Tombol Reset Siswa */}
-                            <button
-                              onClick={() => {
-                                if (window.confirm(`Yakin ingin mereset ujian siswa ${s.fullName}? Semua jawaban akan dikosongkan.`)) {
-                                  handleResetStudent(s.presensiNumber);
-                                }
-                              }}
-                              className="bg-white hover:bg-red-50 text-red-600 px-1.5 py-1 brutal-border text-[10px] font-bold cursor-pointer"
-                              title="Reset ujian siswa ini"
-                            >
-                              RESET
-                            </button>
                           </div>
                         </td>
                       </tr>
@@ -591,7 +527,6 @@ export function AdminDashboard({ onBackToStudent }: AdminDashboardProps) {
           student={selectedStudent}
           onClose={() => setSelectedStudent(null)}
           onUnblock={handleUnblock}
-          onReset={handleResetStudent}
         />
       )}
 

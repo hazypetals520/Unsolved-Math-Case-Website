@@ -7,7 +7,6 @@ import {
   XCircle, 
   AlertTriangle, 
   Unlock, 
-  RotateCcw, 
   User, 
   Hash, 
   Clock, 
@@ -18,14 +17,12 @@ interface StudentDetailModalProps {
   student: StudentRecord;
   onClose: () => void;
   onUnblock: (presensiNumber: string) => void;
-  onReset: (presensiNumber: string) => void;
 }
 
 export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
   student,
   onClose,
   onUnblock,
-  onReset,
 }) => {
   const formatAnswer = (val: any) => {
     if (val === undefined || val === null || val === '') {
@@ -103,17 +100,6 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
               </button>
             )}
 
-            <button
-              onClick={() => {
-                if (window.confirm(`Yakin ingin mereset ujian siswa ${student.fullName}? Data jawaban akan dikosongkan.`)) {
-                  onReset(student.presensiNumber);
-                }
-              }}
-              className="bg-white hover:bg-neutral-100 text-black px-2.5 py-1.5 brutal-border brutal-shadow-sm font-bold text-xs uppercase flex items-center gap-1 cursor-pointer"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              <span>RESET UJIAN</span>
-            </button>
           </div>
         </div>
 
