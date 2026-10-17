@@ -299,6 +299,8 @@ export function App() {
         const serverAttempts = data.attempts || {};
         const serverStatuses = data.caseStatuses || {};
         const serverFinished = Boolean(data.isFinished);
+        const serverIsBlocked = Boolean(data.isBlocked);
+        const serverViolationsCount = typeof data.violationsCount === 'number' ? data.violationsCount : violationsCount;
         const localHasProgress = Object.keys(attempts).length > 0 || Object.keys(caseStatuses).length > 0 || isQuizFinished;
         const serverResetDetected =
           Object.keys(serverAttempts).length === 0 &&
@@ -311,9 +313,14 @@ export function App() {
           return;
         }
 
-        if (data.isBlocked === false && isBlockedByViolation) {
-          setIsBlockedByViolation(false);
-          localStorage.setItem('unsolved_math_blocked', 'false');
+        if (serverIsBlocked !== isBlockedByViolation) {
+          setIsBlockedByViolation(serverIsBlocked);
+          localStorage.setItem('unsolved_math_blocked', String(serverIsBlocked));
+        }
+
+        if (serverViolationsCount !== violationsCount) {
+          setViolationsCount(serverViolationsCount);
+          localStorage.setItem('unsolved_math_violations', String(serverViolationsCount));
         }
 
         if (
@@ -359,7 +366,7 @@ export function App() {
       clearInterval(interval);
       if (channel) channel.close();
     };
-  }, [currentView, profile, attempts, caseStatuses, isQuizFinished, isBlockedByViolation, resetStudentExamState]);
+  }, [currentView, profile, attempts, caseStatuses, isQuizFinished, isBlockedByViolation, violationsCount, resetStudentExamState]);
 
   // Poll backend if blocked to automatically unblock when admin clicks 'Lepaskan'
   useEffect(() => {
@@ -632,31 +639,31 @@ export function App() {
   // Next case handler to navigate directly to the next question
   const handleNextCase = (currentQuestionId: number) => {
     if (activeQuestionTransitionRef.current) return;
-    activeQuestionTransitionRef.current = true;
+    if (activeQuestion?.id !== currentQuestionId) return;
 
     const now = Date.now();
     if (now - lastCaseAdvanceTimeRef.current < 800) {
-      activeQuestionTransitionRef.current = false;
       return;
     }
     lastCaseAdvanceTimeRef.current = now;
+    activeQuestionTransitionRef.current = true;
 
     const currentIndex = QUIZ_QUESTIONS.findIndex((q) => q.id === currentQuestionId);
     if (currentIndex >= 0 && currentIndex < QUIZ_QUESTIONS.length - 1) {
       const nextQ = QUIZ_QUESTIONS[currentIndex + 1];
-      setActiveQuestion(null);
-      requestAnimationFrame(() => {
-        setActiveQuestion(nextQ);
+      setOpenedFromReport(false);
+      setActiveQuestion(nextQ);
+      setTimeout(() => {
         activeQuestionTransitionRef.current = false;
-      });
+      }, 250);
     } else {
       setActiveQuestion(null);
       setOpenedFromReport(false);
       sound.playGodmode();
-      requestAnimationFrame(() => {
+      setTimeout(() => {
         setIsReportOpen(true);
         activeQuestionTransitionRef.current = false;
-      });
+      }, 100);
     }
   };
 
