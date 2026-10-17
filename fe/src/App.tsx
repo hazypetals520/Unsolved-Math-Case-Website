@@ -641,26 +641,6 @@ export function App() {
     }
   };
 
-  // Reset all state
-  const handleResetInvestigation = () => {
-    localStorage.removeItem('unsolved_math_profile');
-    localStorage.removeItem('unsolved_math_statuses');
-    localStorage.removeItem('unsolved_math_attempts');
-    localStorage.removeItem('unsolved_math_violations');
-    localStorage.removeItem('unsolved_math_blocked');
-    localStorage.removeItem('unsolved_math_finished');
-    setProfile(null);
-    setCaseStatuses({});
-    setAttempts({});
-    setViolationsCount(0);
-    setIsBlockedByViolation(false);
-    setIsQuizFinished(false);
-    setActiveQuestion(null);
-    setIsReportOpen(false);
-    setIsManualOpen(false);
-    setPhase('landing');
-  };
-
   // Track if question modal was opened from final report for review
   const [openedFromReport, setOpenedFromReport] = useState<boolean>(false);
 
@@ -758,7 +738,6 @@ export function App() {
           attempts={attempts}
           violationsCount={violationsCount}
           onClose={() => setIsReportOpen(false)}
-          onReset={handleResetInvestigation}
           onReviewQuestion={(q) => {
             setOpenedFromReport(true);
             setIsReportOpen(false);

@@ -20,7 +20,6 @@ interface FinalReportModalProps {
   attempts: Record<number, CaseAttempt>;
   violationsCount: number;
   onClose: () => void;
-  onReset?: () => void;
   onReviewQuestion: (q: QuizQuestion) => void;
 }
 
@@ -31,7 +30,6 @@ export const FinalReportModal: React.FC<FinalReportModalProps> = ({
   attempts,
   violationsCount,
   onClose,
-  onReset,
   onReviewQuestion,
 }) => {
   if (!isOpen) return null;
@@ -270,17 +268,6 @@ export const FinalReportModal: React.FC<FinalReportModalProps> = ({
               <ShieldCheck className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-emerald-600 shrink-0" />
               <span>ARSIP RESMI TERKUNCI PERMANEN</span>
             </div>
-            {onReset && (
-              <button
-                onClick={() => {
-                  sound.playClick();
-                  onReset();
-                }}
-                className="w-full bg-amber-500 hover:bg-amber-400 text-black py-1.5 sm:py-2 brutal-border-2 brutal-shadow font-bold text-[11px] sm:text-xs uppercase tracking-wider cursor-pointer active:translate-x-0.5 active:translate-y-0.5"
-              >
-                BERSIHKAN HALAMAN
-              </button>
-            )}
             <button
               onClick={() => {
                 sound.playClick();

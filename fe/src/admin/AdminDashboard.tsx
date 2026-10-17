@@ -8,6 +8,7 @@ import {
   Search, 
   RotateCw, 
   Download, 
+  Trash2,
   Unlock, 
   Eye, 
   Radio, 
@@ -45,6 +46,7 @@ export function AdminDashboard({ onBackToStudent }: AdminDashboardProps) {
   const [isServerConnected, setIsServerConnected] = useState<boolean>(true);
   const [lastSyncedTime, setLastSyncedTime] = useState<string>('');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [isClearingStudents, setIsClearingStudents] = useState(false);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -147,6 +149,38 @@ export function AdminDashboard({ onBackToStudent }: AdminDashboardProps) {
     } catch (err) {
       console.error(err);
       showToast('Gagal reset data siswa: Backend tidak merespon');
+    }
+  };
+
+  const handleClearAllStudents = async () => {
+    if (isClearingStudents) return;
+
+    const confirmed = window.confirm(
+      `Hapus SEMUA data ${students.length} siswa dari database? Tindakan ini tidak dapat dibatalkan.`
+    );
+    if (!confirmed) return;
+
+    setIsClearingStudents(true);
+    try {
+      const res = await fetch(`${API_BASE}/students/clear-all`, {
+        method: 'POST',
+      });
+      if (!res.ok) {
+        showToast('Gagal membersihkan data siswa: backend menolak permintaan');
+        return;
+      }
+
+      setStudents([]);
+      setSelectedStudent(null);
+      setSearchQuery('');
+      setStatusFilter('all');
+      showToast('BERHASIL: Semua data siswa telah dihapus.');
+      await fetchStudents();
+    } catch (err) {
+      console.error('Gagal menghapus semua data siswa:', err);
+      showToast('Gagal membersihkan data siswa: Backend tidak merespon');
+    } finally {
+      setIsClearingStudents(false);
     }
   };
 
@@ -369,6 +403,16 @@ export function AdminDashboard({ onBackToStudent }: AdminDashboardProps) {
             >
               <Download className="w-3.5 h-3.5" />
               <span>EXPORT CSV</span>
+            </button>
+
+            <button
+              onClick={handleClearAllStudents}
+              disabled={isClearingStudents}
+              className="bg-red-600 hover:bg-red-500 disabled:opacity-60 disabled:cursor-wait text-white px-3 py-1.5 brutal-border brutal-shadow-sm font-bold text-xs uppercase flex items-center gap-1.5 cursor-pointer active:translate-x-0.5 active:translate-y-0.5"
+              title="Hapus seluruh data siswa dari database"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>{isClearingStudents ? 'MENGHAPUS...' : 'BERSIHKAN HALAMAN'}</span>
             </button>
 
           </div>
