@@ -25,7 +25,10 @@ interface AdminDashboardProps {
   onBackToStudent?: () => void;
 }
 
-const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:3001/api').replace(/\/+$/, '');
+const API_BASE = (
+  import.meta.env.VITE_API_URL ||
+  (typeof window !== 'undefined' && window.location.hostname !== 'localhost' ? '/api' : 'http://localhost:3001/api')
+).replace(/\/+$/, '');
 
 export function AdminDashboard({ onBackToStudent }: AdminDashboardProps) {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {

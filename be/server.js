@@ -181,6 +181,10 @@ app.post('/api/students/clear-all', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`[CYBER-EXAM BACKEND] Server running on http://localhost:${PORT}`);
-});
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`[CYBER-EXAM BACKEND] Server running on http://localhost:${PORT}`);
+  });
+}
+
+module.exports = app;
