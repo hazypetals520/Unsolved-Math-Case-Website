@@ -14,6 +14,8 @@ import { UnblockedFullscreenModal } from './components/UnblockedFullscreenModal'
 import { AdminDashboard } from './admin/AdminDashboard';
 import { sound } from './utils/sound';
 
+const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:3001/api').replace(/\/+$/, '');
+
 export function App() {
   // Integrated View: 'student' | 'admin'
   const [currentView, setCurrentView] = useState<'student' | 'admin'>(() => {
@@ -213,7 +215,7 @@ export function App() {
 
       // Notify backend API
       if (profile?.presensiNumber) {
-        fetch('http://localhost:3001/api/students/violation', {
+        fetch(`${API_BASE}/students/violation`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -268,7 +270,7 @@ export function App() {
 
     const checkStatus = async () => {
       try {
-        const res = await fetch(`http://localhost:3001/api/students/${profile.presensiNumber}/status`);
+        const res = await fetch(`${API_BASE}/students/${profile.presensiNumber}/status`);
         if (res.ok) {
           const data = await res.json();
           if (data.isBlocked === false) {
@@ -451,7 +453,7 @@ export function App() {
     setPhase('desktop');
 
     // Notify backend
-    fetch('http://localhost:3001/api/students/login', {
+    fetch(`${API_BASE}/students/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -495,7 +497,7 @@ export function App() {
 
     // Sync progress to backend
     if (profile?.presensiNumber) {
-      fetch('http://localhost:3001/api/students/progress', {
+      fetch(`${API_BASE}/students/progress`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
