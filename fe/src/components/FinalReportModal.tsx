@@ -35,9 +35,8 @@ export const FinalReportModal: React.FC<FinalReportModalProps> = ({
 }) => {
   if (!isOpen) return null;
 
-  const totalAttempted = Object.keys(attempts).length;
   const solvedCount = Object.values(attempts).filter((a) => a.isCorrect).length;
-  const accuracy = totalAttempted > 0 ? Math.round((solvedCount / totalAttempted) * 100) : 0;
+  const accuracy = Math.round((solvedCount / questions.length) * 100);
 
   // Title rank based on accuracy
   const getRankBadge = () => {

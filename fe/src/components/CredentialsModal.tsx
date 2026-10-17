@@ -23,11 +23,19 @@ export const CredentialsModal: React.FC<CredentialsModalProps> = ({
 
   const handleInitialSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!fullName.trim() || !presensiNumber.trim()) {
+    if (!fullName.trim()) {
       sound.playWrong();
-      setErrorMessage('Harap isi Nama Lengkap dan Nomor Presensi secara lengkap!');
+      setErrorMessage('Harap isi Nama Lengkap Penyelidik!');
       return;
     }
+
+    const num = parseInt(presensiNumber, 10);
+    if (!presensiNumber.trim() || isNaN(num) || num < 1 || num > 36) {
+      sound.playWrong();
+      setErrorMessage('Nomor Presensi tidak valid! Harus berupa angka antara 1 sampai 36.');
+      return;
+    }
+
     sound.playClick();
     setErrorMessage('');
     setShowWarningModal(true);
@@ -35,9 +43,12 @@ export const CredentialsModal: React.FC<CredentialsModalProps> = ({
 
   const handleFinalConfirm = () => {
     sound.playWindowOpen();
+    const num = parseInt(presensiNumber, 10);
+    const cleanNumber = num < 10 ? `0${num}` : `${num}`;
+
     onLogin({
       fullName: fullName.trim(),
-      presensiNumber: presensiNumber.trim(),
+      presensiNumber: cleanNumber,
       loggedInAt: new Date().toISOString(),
     });
   };
@@ -144,18 +155,30 @@ export const CredentialsModal: React.FC<CredentialsModalProps> = ({
             <div>
               <label className="block text-[11px] font-bold text-black uppercase mb-1 flex items-center gap-1.5">
                 <Hash className="w-3.5 h-3.5 text-neutral-700" />
-                Nomor Presensi / ID Agen:
+                Nomor Presensi (1 - 36):
               </label>
               <input
                 type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={2}
                 value={presensiNumber}
                 onChange={(e) => {
                   sound.playKey();
-                  setPresensiNumber(e.target.value);
+                  // Only allow digits 0-9
+                  const numericOnly = e.target.value.replace(/\D/g, '').slice(0, 2);
+                  setPresensiNumber(numericOnly);
+                  if (errorMessage) setErrorMessage('');
                 }}
-                placeholder="Contoh: 18 atau AG-018"
+                placeholder="Ketik angka 1 - 36..."
                 className="w-full bg-white text-black px-2.5 py-2 text-xs font-bold brutal-border-2 focus:outline-none focus:bg-amber-50"
               />
+              <div className="flex justify-between items-center text-[10px] text-neutral-500 mt-1 font-mono">
+                <span>Hanya boleh angka 1 sampai 36</span>
+                {presensiNumber && (parseInt(presensiNumber, 10) < 1 || parseInt(presensiNumber, 10) > 36) && (
+                  <span className="text-red-600 font-bold animate-pulse">Wajib 1 - 36!</span>
+                )}
+              </div>
             </div>
 
             <div className="pt-1.5">

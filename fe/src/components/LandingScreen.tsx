@@ -30,9 +30,20 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({ onStart }) => {
         <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 transition-transform group-hover:translate-x-1" />
       </button>
 
-      {/* Subtle Bottom Status */}
-      <div className="absolute bottom-1.5 sm:bottom-2 left-0 right-0 text-center text-[9px] sm:text-[11px] font-mono-code text-neutral-600 select-none px-2 truncate">
-        SECURITY LEVEL 4 // ANTI-CHEAT ACTIVE // JANGAN PINDAH TAB
+      {/* Subtle Bottom Status & Admin Link */}
+      <div className="absolute bottom-1.5 sm:bottom-2 left-0 right-0 flex items-center justify-between text-[9px] sm:text-[11px] font-mono-code text-neutral-600 select-none px-3">
+        <span className="truncate">SECURITY LEVEL 4 // ANTI-CHEAT ACTIVE</span>
+        <a
+          href="#admin"
+          onClick={(e) => {
+            e.preventDefault();
+            window.location.hash = '#admin';
+          }}
+          className="hover:text-black hover:underline cursor-pointer flex items-center gap-1 opacity-60 hover:opacity-100 shrink-0 ml-2"
+          title="Akses Dashboard Pengawas Ujian"
+        >
+          <span>[ 🔒 SYS://ADMIN ]</span>
+        </a>
       </div>
     </div>
   );

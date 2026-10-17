@@ -10,11 +10,55 @@ import { CaseModal } from './components/CaseModal';
 import { ManualModal } from './components/ManualModal';
 import { FinalReportModal } from './components/FinalReportModal';
 import { AntiCheatModal } from './components/AntiCheatModal';
+import { UnblockedFullscreenModal } from './components/UnblockedFullscreenModal';
+import { AdminDashboard } from './admin/AdminDashboard';
 import { sound } from './utils/sound';
 
 export function App() {
+  // Integrated View: 'student' | 'admin'
+  const [currentView, setCurrentView] = useState<'student' | 'admin'>(() => {
+    const hash = typeof window !== 'undefined' ? window.location.hash.toLowerCase() : '';
+    const path = typeof window !== 'undefined' ? window.location.pathname.toLowerCase() : '';
+    const search = typeof window !== 'undefined' ? window.location.search.toLowerCase() : '';
+    return hash === '#admin' || hash.startsWith('#/admin') || path.startsWith('/admin') || search.includes('admin')
+      ? 'admin'
+      : 'student';
+  });
+
+  // Listen to navigation events (hash or pathname)
+  useEffect(() => {
+    const handleLocationChange = () => {
+      const hash = window.location.hash.toLowerCase();
+      const path = window.location.pathname.toLowerCase();
+      const search = window.location.search.toLowerCase();
+      if (hash === '#admin' || hash.startsWith('#/admin') || path.startsWith('/admin') || search.includes('admin')) {
+        setCurrentView('admin');
+      } else {
+        setCurrentView('student');
+      }
+    };
+
+    window.addEventListener('hashchange', handleLocationChange);
+    window.addEventListener('popstate', handleLocationChange);
+    return () => {
+      window.removeEventListener('hashchange', handleLocationChange);
+      window.removeEventListener('popstate', handleLocationChange);
+    };
+  }, []);
+
+  const handleBackToStudent = () => {
+    window.location.hash = '';
+    if (window.location.pathname.startsWith('/admin')) {
+      window.history.pushState({}, '', '/');
+    }
+    setCurrentView('student');
+  };
+
   // App Phase
   const [phase, setPhase] = useState<'landing' | 'desktop'>('landing');
+
+  // Modal for re-entering fullscreen after being unblocked by admin
+  const [isUnblockedModalOpen, setIsUnblockedModalOpen] = useState<boolean>(false);
 
   // Investigator Profile
   const [profile, setProfile] = useState<InvestigatorProfile | null>(() => {
@@ -52,6 +96,15 @@ export function App() {
   const [isManualOpen, setIsManualOpen] = useState<boolean>(false);
   const [isReportOpen, setIsReportOpen] = useState<boolean>(false);
   const [isAntiCheatOpen, setIsAntiCheatOpen] = useState<boolean>(false);
+
+  // Finished Quiz State
+  const [isQuizFinished, setIsQuizFinished] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('unsolved_math_finished') === 'true';
+    } catch {
+      return false;
+    }
+  });
 
   // Security & Violations
   const [violationsCount, setViolationsCount] = useState<number>(() => {
@@ -103,6 +156,10 @@ export function App() {
     localStorage.setItem('unsolved_math_blocked', isBlockedByViolation.toString());
   }, [isBlockedByViolation]);
 
+  useEffect(() => {
+    localStorage.setItem('unsolved_math_finished', isQuizFinished.toString());
+  }, [isQuizFinished]);
+
   // If already logged in previously, stay on desktop or start on landing
   useEffect(() => {
     if (profile && phase === 'landing') {
@@ -115,7 +172,13 @@ export function App() {
   const solvedCount = Object.values(caseStatuses).filter((s) => s === 'solved').length;
   const failedCount = Object.values(caseStatuses).filter((s) => s === 'failed').length;
   const totalAttempted = solvedCount + failedCount;
-  const allAttempted = totalAttempted === QUIZ_QUESTIONS.length;
+  const allAttempted = isQuizFinished || totalAttempted === QUIZ_QUESTIONS.length;
+
+  useEffect(() => {
+    if (totalAttempted === QUIZ_QUESTIONS.length && !isQuizFinished) {
+      setIsQuizFinished(true);
+    }
+  }, [totalAttempted, isQuizFinished]);
 
   // Auto-fail all remaining unopened questions when blocked
   const handleAutoBlock = useCallback(() => {
@@ -129,10 +192,9 @@ export function App() {
     setIsBlockedByViolation(true);
     setActiveQuestion(null);
     setIsAntiCheatOpen(false);
-    // Show final report after short delay
-    setTimeout(() => {
-      setIsReportOpen(true);
-    }, 800);
+    setIsReportOpen(false);
+    // Do NOT open FinalReportModal — blocked students should only see the blocked overlay,
+    // not explanations or correct answers. Report will be available after admin releases them.
   }, [caseStatuses]);
 
   // Unified violation trigger with 1500ms cooldown to prevent multi-event duplicate triggers
@@ -149,6 +211,24 @@ export function App() {
       console.warn(`[SECURITY / ANTI-CHEAT] Violation: ${reason}`);
       sound.playWarningAlarm();
 
+      // Notify backend API
+      if (profile?.presensiNumber) {
+        fetch('http://localhost:3001/api/students/violation', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            presensiNumber: profile.presensiNumber,
+            reason,
+          }),
+        })
+          .then(() => {
+            if (typeof BroadcastChannel !== 'undefined') {
+              new BroadcastChannel('cyber_exam_channel').postMessage('violation');
+            }
+          })
+          .catch(() => {});
+      }
+
       setViolationsCount((prev) => {
         const next = prev + 1;
         if (next >= 2) {
@@ -160,12 +240,117 @@ export function App() {
         return next;
       });
     },
-    [allAttempted, isBlockedByViolation, phase, handleAutoBlock]
+    [allAttempted, isBlockedByViolation, phase, profile, handleAutoBlock]
   );
+
+  // Function to enter fullscreen cleanly
+  const enterFullscreen = useCallback(() => {
+    if (document.documentElement.requestFullscreen) {
+      document.documentElement
+        .requestFullscreen()
+        .then(() => {
+          isFullscreenActiveRef.current = true;
+          setIsUnblockedModalOpen(false);
+        })
+        .catch((err) => {
+          console.warn('Fullscreen entry failed or cancelled:', err);
+        });
+    } else {
+      setIsUnblockedModalOpen(false);
+    }
+  }, []);
+
+  // Poll backend if blocked to automatically unblock when admin clicks 'Lepaskan'
+  useEffect(() => {
+    // NEVER run unblock polling or fullscreen triggers if user is in Admin view
+    if (currentView === 'admin') return;
+    if (!isBlockedByViolation || !profile?.presensiNumber) return;
+
+    const checkStatus = async () => {
+      try {
+        const res = await fetch(`http://localhost:3001/api/students/${profile.presensiNumber}/status`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.isBlocked === false) {
+            console.log('[SECURITY] Student unblocked by administrator');
+            setIsBlockedByViolation(false);
+            const currentViolations = typeof data.violationsCount === 'number' ? data.violationsCount : 2;
+            setViolationsCount(currentViolations);
+            setIsReportOpen(false);
+            setIsAntiCheatOpen(false);
+
+            // Sync to localStorage
+            localStorage.setItem('unsolved_math_violations', currentViolations.toString());
+            localStorage.setItem('unsolved_math_blocked', 'false');
+
+            if (data.caseStatuses) {
+              setCaseStatuses(data.caseStatuses);
+              localStorage.setItem('unsolved_math_statuses', JSON.stringify(data.caseStatuses));
+            }
+
+            // Only attempt fullscreen re-entry if this is an actual student tab (NOT admin)
+            const isCurrentWindowAdmin =
+              typeof window !== 'undefined' &&
+              (window.location.hash.toLowerCase().includes('admin') ||
+                window.location.pathname.toLowerCase().includes('admin'));
+
+            if (!isCurrentWindowAdmin && currentView === 'student') {
+              if (!document.fullscreenElement) {
+                if (document.documentElement.requestFullscreen) {
+                  document.documentElement
+                    .requestFullscreen()
+                    .then(() => {
+                      isFullscreenActiveRef.current = true;
+                      setIsUnblockedModalOpen(false);
+                    })
+                    .catch(() => {
+                      // Browser requires user gesture to enter fullscreen: prompt user with modal
+                      setIsUnblockedModalOpen(true);
+                    });
+                } else {
+                  setIsUnblockedModalOpen(false);
+                }
+              } else {
+                isFullscreenActiveRef.current = true;
+                setIsUnblockedModalOpen(false);
+              }
+            }
+          }
+        }
+      } catch {
+        // Backend offline or unreachable
+      }
+    };
+
+    checkStatus();
+    const interval = setInterval(checkStatus, 2000);
+
+    // Also listen to BroadcastChannel
+    let channel: BroadcastChannel | null = null;
+    if (typeof BroadcastChannel !== 'undefined') {
+      channel = new BroadcastChannel('cyber_exam_channel');
+      channel.onmessage = (e) => {
+        const msg = e.data;
+        if (
+          msg === 'unblock' ||
+          msg === 'reset' ||
+          msg?.type === 'UNBLOCKED' ||
+          msg?.type === 'RESET'
+        ) {
+          checkStatus();
+        }
+      };
+    }
+
+    return () => {
+      clearInterval(interval);
+      if (channel) channel.close();
+    };
+  }, [isBlockedByViolation, profile, currentView]);
 
   // Security event listeners: active during desktop phase until all cases completed
   useEffect(() => {
-    if (allAttempted || isBlockedByViolation || phase !== 'desktop') {
+    if (allAttempted || isBlockedByViolation || phase !== 'desktop' || isUnblockedModalOpen) {
       setIsAntiCheatOpen(false);
       return;
     }
@@ -209,7 +394,10 @@ export function App() {
 
     // 5. Fullscreen exit detection
     const handleFullscreenChange = () => {
-      if (isFullscreenActiveRef.current && !document.fullscreenElement) {
+      if (document.fullscreenElement) {
+        isFullscreenActiveRef.current = true;
+        setIsUnblockedModalOpen(false);
+      } else if (isFullscreenActiveRef.current && !isBlockedByViolation && !isUnblockedModalOpen) {
         triggerViolation('Keluar dari mode layar penuh (Fullscreen)');
       }
     };
@@ -248,7 +436,7 @@ export function App() {
       window.removeEventListener('contextmenu', handleContextMenu);
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [allAttempted, isBlockedByViolation, phase, triggerViolation]);
+  }, [allAttempted, isBlockedByViolation, phase, triggerViolation, isUnblockedModalOpen]);
 
   // Toggle sound
   const handleToggleMute = () => {
@@ -261,6 +449,22 @@ export function App() {
     setProfile(newProfile);
     setIsCredentialsOpen(false);
     setPhase('desktop');
+
+    // Notify backend
+    fetch('http://localhost:3001/api/students/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fullName: newProfile.fullName,
+        presensiNumber: newProfile.presensiNumber,
+      }),
+    })
+      .then(() => {
+        if (typeof BroadcastChannel !== 'undefined') {
+          new BroadcastChannel('cyber_exam_channel').postMessage('login');
+        }
+      })
+      .catch(() => {});
 
     // Request fullscreen on user gesture for secure test environment
     if (document.documentElement.requestFullscreen) {
@@ -277,15 +481,37 @@ export function App() {
 
   // Case resolution handler (evaluation complete)
   const handleResolveCase = (attempt: CaseAttempt) => {
-    setAttempts((prev) => ({
-      ...prev,
+    const nextAttempts = {
+      ...attempts,
       [attempt.questionId]: attempt,
-    }));
-
-    setCaseStatuses((prev) => ({
-      ...prev,
+    };
+    const nextStatuses: Record<number, CaseStatus> = {
+      ...caseStatuses,
       [attempt.questionId]: attempt.isCorrect ? 'solved' : 'failed',
-    }));
+    };
+
+    setAttempts(nextAttempts);
+    setCaseStatuses(nextStatuses);
+
+    // Sync progress to backend
+    if (profile?.presensiNumber) {
+      fetch('http://localhost:3001/api/students/progress', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          presensiNumber: profile.presensiNumber,
+          caseStatuses: nextStatuses,
+          attempts: nextAttempts,
+          isFinished: Object.keys(nextAttempts).length >= QUIZ_QUESTIONS.length,
+        }),
+      })
+        .then(() => {
+          if (typeof BroadcastChannel !== 'undefined') {
+            new BroadcastChannel('cyber_exam_channel').postMessage('progress');
+          }
+        })
+        .catch(() => {});
+    }
   };
 
   // Next case handler to navigate directly to the next question
@@ -309,11 +535,13 @@ export function App() {
     localStorage.removeItem('unsolved_math_attempts');
     localStorage.removeItem('unsolved_math_violations');
     localStorage.removeItem('unsolved_math_blocked');
+    localStorage.removeItem('unsolved_math_finished');
     setProfile(null);
     setCaseStatuses({});
     setAttempts({});
     setViolationsCount(0);
     setIsBlockedByViolation(false);
+    setIsQuizFinished(false);
     setActiveQuestion(null);
     setIsReportOpen(false);
     setIsManualOpen(false);
@@ -342,6 +570,10 @@ export function App() {
         .catch(() => {});
     }
   };
+
+  if (currentView === 'admin') {
+    return <AdminDashboard onBackToStudent={handleBackToStudent} />;
+  }
 
   return (
     <CRTFrame
@@ -404,31 +636,38 @@ export function App() {
         onClose={() => setIsManualOpen(false)}
       />
 
-      {/* End Game Official Report Modal */}
-      <FinalReportModal
-        isOpen={isReportOpen}
-        profile={profile}
-        questions={QUIZ_QUESTIONS}
-        attempts={attempts}
-        violationsCount={violationsCount}
-        onClose={() => setIsReportOpen(false)}
-        onReset={handleResetInvestigation}
-        onReviewQuestion={(q) => {
-          setOpenedFromReport(true);
-          setIsReportOpen(false);
-          setActiveQuestion(q);
-        }}
-      />
-
-      {/* Anti-Cheat Tab Violation Overlay (Disabled when all questions completed) */}
-      {!allAttempted && (
-        <AntiCheatModal
-          isOpen={isAntiCheatOpen}
+      {/* End Game Official Report Modal — hidden while blocked so student can't see explanations */}
+      {!isBlockedByViolation && (
+        <FinalReportModal
+          isOpen={isReportOpen}
+          profile={profile}
+          questions={QUIZ_QUESTIONS}
+          attempts={attempts}
           violationsCount={violationsCount}
-          isBlocked={isBlockedByViolation}
-          onAcknowledge={handleAcknowledgeAntiCheat}
+          onClose={() => setIsReportOpen(false)}
+          onReset={handleResetInvestigation}
+          onReviewQuestion={(q) => {
+            setOpenedFromReport(true);
+            setIsReportOpen(false);
+            setActiveQuestion(q);
+          }}
         />
       )}
+
+      {/* Anti-Cheat Tab Violation Overlay — always renders when blocked, even if all questions are marked */}
+      <AntiCheatModal
+        isOpen={isAntiCheatOpen}
+        violationsCount={violationsCount}
+        isBlocked={isBlockedByViolation}
+        score={Object.values(attempts).filter((a) => a.isCorrect).length}
+        onAcknowledge={handleAcknowledgeAntiCheat}
+      />
+
+      {/* Unblocked Fullscreen Auto Re-Entry Modal */}
+      <UnblockedFullscreenModal
+        isOpen={isUnblockedModalOpen}
+        onEnterFullscreen={enterFullscreen}
+      />
     </CRTFrame>
   );
 }

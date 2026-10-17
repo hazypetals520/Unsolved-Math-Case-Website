@@ -6,6 +6,7 @@ interface AntiCheatModalProps {
   isOpen: boolean;
   violationsCount: number;
   isBlocked: boolean;
+  score?: number;
   onAcknowledge: () => void;
 }
 
@@ -13,12 +14,15 @@ export const AntiCheatModal: React.FC<AntiCheatModalProps> = ({
   isOpen,
   violationsCount,
   isBlocked,
+  score = 0,
   onAcknowledge,
 }) => {
   if (!isOpen && !isBlocked) return null;
 
   // BLOCKED mode: permanent full-screen overlay, no dismiss
   if (isBlocked) {
+    const calculatedAccuracy = Math.round((score / 10) * 100);
+
     return (
       <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/95 font-mono-code select-none p-3">
         <div className="w-full max-w-sm sm:max-w-md text-center space-y-4 p-4 relative z-10">
@@ -33,26 +37,47 @@ export const AntiCheatModal: React.FC<AntiCheatModalProps> = ({
             </div>
           </div>
 
-          <div className="bg-black border-2 border-red-800 p-3 text-left space-y-2">
-            <div className="text-red-500 font-bold text-xs uppercase tracking-wider border-b border-red-800 pb-1.5">
-              LOG PELANGGARAN SISTEM:
+          <div className="bg-black border-2 border-red-800 p-3 text-left space-y-3">
+            <div className="text-red-500 font-bold text-xs uppercase tracking-wider border-b border-red-800 pb-1.5 flex items-center justify-between">
+              <span>LOG PELANGGARAN SISTEM</span>
+              <span className="text-red-400 font-mono">BATAS: 2x</span>
             </div>
             <div className="text-neutral-300 text-xs leading-relaxed">
-              Pengguna telah melakukan <span className="text-red-400 font-bold">{violationsCount}x pelanggaran protokol keamanan</span> (terdeteksi aktivitas: layar belah / split-screen, floating app, mematikan layar, atau meninggalkan sesi).
+              Pengguna telah melakukan <span className="text-red-400 font-bold">{violationsCount}x pelanggaran protokol keamanan</span> (terdeteksi aktivitas: layar belah / split-screen, floating app, mematikan layar, atau meninggalkan aplikasi).
             </div>
-            <div className="text-neutral-400 text-[11px] leading-relaxed">
-              Sesuai protokol keamanan investigasi: Sesi ini dihentikan paksa. Semua berkas yang belum diselesaikan telah ditandai sebagai <span className="text-red-400 font-bold">GAGAL</span>.
+
+            {/* Score & Accuracy Card */}
+            <div className="bg-neutral-900 border border-neutral-700 p-2.5 space-y-1.5">
+              <div className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider">
+                HASIL CAPAIAN SEBELUM TERBLOKIR:
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-center pt-1">
+                <div className="bg-black/60 border border-neutral-700 p-1.5">
+                  <div className="text-[10px] text-neutral-400 uppercase">Jawaban Benar (Skor)</div>
+                  <div className="text-lg font-black text-emerald-400">
+                    {score} <span className="text-xs text-neutral-500">/ 10</span>
+                  </div>
+                </div>
+                <div className="bg-black/60 border border-neutral-700 p-1.5">
+                  <div className="text-[10px] text-neutral-400 uppercase">Nilai Akhir (Akurasi)</div>
+                  <div className="text-lg font-black text-amber-400">
+                    {calculatedAccuracy}%
+                  </div>
+                  <div className="text-[9px] text-neutral-500">({score} benar dari 10 total soal)</div>
+                </div>
+              </div>
             </div>
-            <div className="bg-red-900/40 border border-red-700 p-1.5 flex items-center justify-between">
-              <span className="text-red-300 text-xs font-bold">STATUS SESI:</span>
-              <span className="text-red-400 text-[11px] font-bold bg-red-900 px-2 py-0.5 border border-red-600">
-                TERMINATED — {violationsCount}x VIOLATIONS
+
+            <div className="bg-red-900/40 border border-red-700 p-2 text-xs flex items-center justify-between font-bold">
+              <span className="text-red-300">STATUS SESI:</span>
+              <span className="text-red-400 text-[11px] bg-red-950 px-2 py-0.5 border border-red-600">
+                BLOCKED ({violationsCount}x VIOLATIONS)
               </span>
             </div>
           </div>
 
-          <div className="text-neutral-500 text-[10px]">
-            Laporan akhir sedang dibuka otomatis...
+          <div className="text-neutral-400 text-xs bg-black/80 border border-neutral-800 p-2 font-mono">
+            Menunggu verifikasi pengawas / admin untuk membuka blokir akses.
           </div>
         </div>
       </div>
