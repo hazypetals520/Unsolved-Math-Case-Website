@@ -25,9 +25,13 @@ interface AdminDashboardProps {
   onBackToStudent?: () => void;
 }
 
+const configuredApiUrl = import.meta.env.VITE_API_URL;
+const isLocalApiUrl = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/|$)/i.test(configuredApiUrl || '');
 const API_BASE = (
-  import.meta.env.VITE_API_URL ||
-  (typeof window !== 'undefined' && window.location.hostname !== 'localhost' ? '/api' : 'http://localhost:3001/api')
+  import.meta.env.PROD && isLocalApiUrl
+    ? '/api'
+    : configuredApiUrl ||
+      (typeof window !== 'undefined' && window.location.hostname !== 'localhost' ? '/api' : 'http://localhost:3001/api')
 ).replace(/\/+$/, '');
 
 export function AdminDashboard({ onBackToStudent }: AdminDashboardProps) {
@@ -233,7 +237,7 @@ export function AdminDashboard({ onBackToStudent }: AdminDashboardProps) {
   };
 
   return (
-    <div className="min-h-screen bg-[#0c0d10] text-[#f4f1ea] font-mono-code p-2 sm:p-4 select-none overflow-y-auto">
+    <div className="h-screen min-h-0 bg-[#0c0d10] text-[#f4f1ea] font-mono-code p-2 sm:p-4 select-none overflow-y-auto">
       
       {/* Toast Notification */}
       {toastMessage && (

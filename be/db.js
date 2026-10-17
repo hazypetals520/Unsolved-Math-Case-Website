@@ -174,8 +174,8 @@ async function updateStudentProgress(presensiNumber, { caseStatuses, attempts, i
   const student = await getStudent(cleanPresensi);
   if (!student) return null;
 
-  const newCaseStatuses = caseStatuses ? caseStatuses : student.caseStatuses;
-  const newAttempts = attempts ? attempts : student.attempts;
+  const newCaseStatuses = { ...student.caseStatuses, ...(caseStatuses || {}) };
+  const newAttempts = { ...student.attempts, ...(attempts || {}) };
 
   const attemptsArray = Object.values(newAttempts || {});
   const totalAttempted = attemptsArray.length;
@@ -183,7 +183,7 @@ async function updateStudentProgress(presensiNumber, { caseStatuses, attempts, i
   const score = solvedCount;
   // Akurasi/Nilai dihitung dari jumlah benar dibagi total 10 soal (1 benar dari 10 = 10%)
   const accuracy = Math.round((solvedCount / 10) * 100);
-  const finished = isFinished !== undefined ? (isFinished ? 1 : 0) : totalAttempted >= 10 ? 1 : student.isFinished ? 1 : 0;
+  const finished = isFinished || totalAttempted >= 10 || student.isFinished ? 1 : 0;
   const now = new Date().toISOString();
 
   await client.execute({
@@ -226,6 +226,7 @@ async function recordViolation(presensiNumber, reason) {
       ignored: true,
     };
   }
+  const newViolationsCount = student.violationsCount + 1;
   const newHistory = [...student.violationHistory, {
     reason: reason || 'Anti-cheat violation detected',
     timestamp: new Date().toISOString(),

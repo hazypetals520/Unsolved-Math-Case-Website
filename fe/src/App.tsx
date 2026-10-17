@@ -14,9 +14,13 @@ import { UnblockedFullscreenModal } from './components/UnblockedFullscreenModal'
 import { AdminDashboard } from './admin/AdminDashboard';
 import { sound } from './utils/sound';
 
+const configuredApiUrl = import.meta.env.VITE_API_URL;
+const isLocalApiUrl = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/|$)/i.test(configuredApiUrl || '');
 const API_BASE = (
-  import.meta.env.VITE_API_URL ||
-  (typeof window !== 'undefined' && window.location.hostname !== 'localhost' ? '/api' : 'http://localhost:3001/api')
+  import.meta.env.PROD && isLocalApiUrl
+    ? '/api'
+    : configuredApiUrl ||
+      (typeof window !== 'undefined' && window.location.hostname !== 'localhost' ? '/api' : 'http://localhost:3001/api')
 ).replace(/\/+$/, '');
 
 export function App() {
@@ -217,12 +221,24 @@ export function App() {
             reason,
           }),
         })
-          .then(() => {
+          .then(async (res) => {
+            if (!res.ok) {
+              throw new Error(`Violation sync failed with HTTP ${res.status}`);
+            }
+            const data = await res.json();
+            if (typeof data.violationsCount === 'number') {
+              setViolationsCount(data.violationsCount);
+            }
+            if (data.isBlocked) {
+              handleAutoBlock();
+            }
             if (typeof BroadcastChannel !== 'undefined') {
               new BroadcastChannel('cyber_exam_channel').postMessage('violation');
             }
           })
-          .catch(() => {});
+          .catch((error) => {
+            console.error('[SECURITY / ANTI-CHEAT] Failed to sync violation:', error);
+          });
       }
 
       setViolationsCount((prev) => {
@@ -511,12 +527,17 @@ export function App() {
           isFinished: Object.keys(nextAttempts).length >= QUIZ_QUESTIONS.length,
         }),
       })
-        .then(() => {
+        .then((res) => {
+          if (!res.ok) {
+            throw new Error(`Progress sync failed with HTTP ${res.status}`);
+          }
           if (typeof BroadcastChannel !== 'undefined') {
             new BroadcastChannel('cyber_exam_channel').postMessage('progress');
           }
         })
-        .catch(() => {});
+        .catch((error) => {
+          console.error('[PROGRESS] Failed to sync student progress:', error);
+        });
     }
   };
 
