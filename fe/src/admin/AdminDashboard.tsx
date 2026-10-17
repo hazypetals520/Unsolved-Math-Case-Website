@@ -334,7 +334,7 @@ export function AdminDashboard({ onBackToStudent }: AdminDashboardProps) {
         <StatsCards students={students} />
 
         {/* Action Controls & Filters Toolbar */}
-        <div className="bg-[#f4f1ea] text-black brutal-border-2 brutal-shadow p-3 flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="bg-[#f4f1ea] text-black brutal-border-2 brutal-shadow p-3 flex flex-col xl:flex-row xl:items-center justify-between gap-3">
           
           {/* Search Box */}
           <div className="relative flex-1 max-w-md">
@@ -395,10 +395,10 @@ export function AdminDashboard({ onBackToStudent }: AdminDashboardProps) {
           </div>
 
           {/* Export Tools */}
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
             <button
               onClick={handleExportCSV}
-              className="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 brutal-border brutal-shadow-sm font-bold text-xs uppercase flex items-center gap-1.5 cursor-pointer active:translate-x-0.5 active:translate-y-0.5"
+              className="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 brutal-border brutal-shadow-sm font-bold text-xs uppercase flex items-center gap-1.5 whitespace-nowrap cursor-pointer active:translate-x-0.5 active:translate-y-0.5"
               title="Download File Rekap CSV untuk Excel"
             >
               <Download className="w-3.5 h-3.5" />
@@ -408,7 +408,7 @@ export function AdminDashboard({ onBackToStudent }: AdminDashboardProps) {
             <button
               onClick={handleClearAllStudents}
               disabled={isClearingStudents}
-              className="bg-red-600 hover:bg-red-500 disabled:opacity-60 disabled:cursor-wait text-white px-3 py-1.5 brutal-border brutal-shadow-sm font-bold text-xs uppercase flex items-center gap-1.5 cursor-pointer active:translate-x-0.5 active:translate-y-0.5"
+              className="bg-red-600 hover:bg-red-500 disabled:opacity-60 disabled:cursor-wait text-white px-3 py-1.5 brutal-border brutal-shadow-sm font-bold text-xs uppercase flex items-center gap-1.5 whitespace-nowrap cursor-pointer active:translate-x-0.5 active:translate-y-0.5"
               title="Hapus seluruh data siswa dari database"
             >
               <Trash2 className="w-3.5 h-3.5" />
