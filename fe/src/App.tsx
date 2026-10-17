@@ -137,6 +137,7 @@ export function App() {
   // Anti-cheat tracking refs
   const lastViolationTimeRef = useRef<number>(0);
   const lastCaseAdvanceTimeRef = useRef<number>(0);
+  const activeQuestionTransitionRef = useRef<boolean>(false);
   const initialHeightRef = useRef<number>(window.innerHeight);
   const isFullscreenActiveRef = useRef<boolean>(false);
 
@@ -630,19 +631,32 @@ export function App() {
 
   // Next case handler to navigate directly to the next question
   const handleNextCase = (currentQuestionId: number) => {
+    if (activeQuestionTransitionRef.current) return;
+    activeQuestionTransitionRef.current = true;
+
     const now = Date.now();
-    if (now - lastCaseAdvanceTimeRef.current < 800) return;
+    if (now - lastCaseAdvanceTimeRef.current < 800) {
+      activeQuestionTransitionRef.current = false;
+      return;
+    }
     lastCaseAdvanceTimeRef.current = now;
 
     const currentIndex = QUIZ_QUESTIONS.findIndex((q) => q.id === currentQuestionId);
     if (currentIndex >= 0 && currentIndex < QUIZ_QUESTIONS.length - 1) {
       const nextQ = QUIZ_QUESTIONS[currentIndex + 1];
-      setActiveQuestion(nextQ);
+      setActiveQuestion(null);
+      requestAnimationFrame(() => {
+        setActiveQuestion(nextQ);
+        activeQuestionTransitionRef.current = false;
+      });
     } else {
       setActiveQuestion(null);
       setOpenedFromReport(false);
       sound.playGodmode();
-      setIsReportOpen(true);
+      requestAnimationFrame(() => {
+        setIsReportOpen(true);
+        activeQuestionTransitionRef.current = false;
+      });
     }
   };
 
@@ -650,6 +664,7 @@ export function App() {
   const [openedFromReport, setOpenedFromReport] = useState<boolean>(false);
 
   const handleCloseCaseModal = () => {
+    if (activeQuestionTransitionRef.current) return;
     setActiveQuestion(null);
     if (openedFromReport) {
       setOpenedFromReport(false);

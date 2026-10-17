@@ -203,11 +203,13 @@ export const CaseModal: React.FC<CaseModalProps> = ({
   };
 
   const handleFinishAndNext = () => {
-    if (onNextCase) {
-      sound.playClick();
-      onNextCase(question.id);
-    } else {
-      onClose();
+    if (isChecked) {
+      if (onNextCase) {
+        sound.playClick();
+        onNextCase(question.id);
+      } else {
+        onClose();
+      }
     }
   };
 
@@ -721,7 +723,8 @@ export const CaseModal: React.FC<CaseModalProps> = ({
 
               <button
                 onClick={handleFinishAndNext}
-                className="w-1/2 sm:w-auto px-2 sm:px-6 py-2 sm:py-2.5 bg-red-600 hover:bg-red-500 text-white font-mono-code font-bold text-[10px] sm:text-sm uppercase tracking-wider brutal-border-2 brutal-shadow brutal-shadow-active flex items-center justify-center gap-1 cursor-pointer truncate"
+                disabled={!isChecked}
+                className="w-1/2 sm:w-auto px-2 sm:px-6 py-2 sm:py-2.5 bg-red-600 hover:bg-red-500 disabled:opacity-60 disabled:cursor-not-allowed text-white font-mono-code font-bold text-[10px] sm:text-sm uppercase tracking-wider brutal-border-2 brutal-shadow brutal-shadow-active flex items-center justify-center gap-1 cursor-pointer truncate"
               >
                 <span>{hasNextCase ? `SOAL BERIKUTNYA (#${question.id + 1})` : 'LIHAT LAPORAN AKHIR'}</span>
                 <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
