@@ -7,6 +7,7 @@ import {
   XCircle, 
   AlertTriangle, 
   Unlock, 
+  RotateCw,
   User, 
   Hash, 
   Clock, 
@@ -17,12 +18,14 @@ interface StudentDetailModalProps {
   student: StudentRecord;
   onClose: () => void;
   onUnblock: (presensiNumber: string) => void;
+  onReset: (presensiNumber: string) => void;
 }
 
 export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
   student,
   onClose,
   onUnblock,
+  onReset,
 }) => {
   const formatAnswer = (val: any) => {
     if (val === undefined || val === null || val === '') {
@@ -90,6 +93,15 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
 
           {/* Action Buttons */}
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => onReset(student.presensiNumber)}
+              className="bg-amber-500 hover:bg-amber-400 text-black px-3 py-1.5 brutal-border brutal-shadow-sm font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 cursor-pointer"
+              title="Reset jawaban siswa agar bisa mulai dari awal"
+            >
+              <RotateCw className="w-4 h-4" />
+              <span>RESET ULANG</span>
+            </button>
+
             {student.isBlocked && (
               <button
                 onClick={() => onUnblock(student.presensiNumber)}
@@ -99,7 +111,6 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                 <span>LEPASKAN & BUKA BLOKIR</span>
               </button>
             )}
-
           </div>
         </div>
 

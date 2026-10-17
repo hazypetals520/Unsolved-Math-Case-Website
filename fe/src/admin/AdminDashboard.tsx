@@ -121,6 +121,35 @@ export function AdminDashboard({ onBackToStudent }: AdminDashboardProps) {
     }
   };
 
+  // Reset a student's exam state without clearing the block status or violation record.
+  const handleReset = async (presensiNumber: string) => {
+    try {
+      const res = await fetch(`${API_BASE}/students/${presensiNumber}/reset`, {
+        method: 'POST',
+      });
+      if (res.ok) {
+        const data = await res.json();
+        showToast(`BERHASIL: Data jawaban siswa presensi #${presensiNumber} direset ulang.`);
+
+        if (typeof BroadcastChannel !== 'undefined') {
+          const channel = new BroadcastChannel('cyber_exam_channel');
+          channel.postMessage({ type: 'RESET', presensiNumber });
+          channel.close();
+        }
+
+        fetchStudents();
+        if (selectedStudent?.presensiNumber === presensiNumber && data.student) {
+          setSelectedStudent(data.student);
+        }
+      } else {
+        showToast('Gagal reset data siswa: backend menolak permintaan');
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('Gagal reset data siswa: Backend tidak merespon');
+    }
+  };
+
   // Export to CSV
   const handleExportCSV = () => {
     if (students.length === 0) {
@@ -527,6 +556,7 @@ export function AdminDashboard({ onBackToStudent }: AdminDashboardProps) {
           student={selectedStudent}
           onClose={() => setSelectedStudent(null)}
           onUnblock={handleUnblock}
+          onReset={handleReset}
         />
       )}
 
