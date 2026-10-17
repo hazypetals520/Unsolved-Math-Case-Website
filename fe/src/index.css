@@ -1,0 +1,145 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --bg-cream: #f4f1ea;
+    --border-black: #000000;
+    --accent-red: #d92222;
+    --accent-green: #1a7e36;
+    --monitor-bezel: #d4cfbe;
+    --monitor-bezel-shadow: #9e9785;
+  }
+
+  html, body, #root {
+    background-color: #0d0f12;
+    color: #1a1a1a;
+    font-family: 'Space Mono', 'Courier New', monospace;
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+  }
+}
+
+/* CRT and Retro Scanlines Overlay (Disabled for clean crisp readability) */
+.crt-screen-container {
+  position: relative;
+  background-color: var(--bg-cream);
+  overflow: hidden;
+}
+
+.crt-overlay {
+  display: none !important;
+}
+
+.vignette-effect {
+  display: none !important;
+}
+
+/* Retro Dither / Checkerboard Patterns (as seen in Image 1 retro OS headers) */
+.retro-dither {
+  background-image: radial-gradient(#000000 1px, transparent 1px);
+  background-size: 4px 4px;
+}
+
+.retro-checker {
+  background: repeating-conic-gradient(#000 0% 25%, #fff 0% 50%) 50% / 4px 4px;
+}
+
+.retro-stripes {
+  background: repeating-linear-gradient(
+    0deg,
+    #000,
+    #000 2px,
+    transparent 2px,
+    transparent 4px
+  );
+}
+
+/* Brutalist Shadows and Elements */
+.brutal-border {
+  border: 3px solid #000;
+}
+
+.brutal-border-2 {
+  border: 2px solid #000;
+}
+
+.brutal-border-4 {
+  border: 4px solid #000;
+}
+
+.brutal-shadow {
+  box-shadow: 4px 4px 0px #000;
+}
+
+.brutal-shadow-sm {
+  box-shadow: 2px 2px 0px #000;
+}
+
+.brutal-shadow-lg {
+  box-shadow: 6px 6px 0px #000;
+}
+
+.brutal-shadow-active:active {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0px #000;
+}
+
+/* Custom Pixel Fonts classes */
+.font-pixel {
+  font-family: 'VT323', monospace;
+}
+
+.font-mono-code {
+  font-family: 'Space Mono', monospace;
+}
+
+.font-retro-typewriter {
+  font-family: 'Courier Prime', monospace;
+}
+
+/* Retro Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: #e2ddd3;
+  border-left: 2px solid #000;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #000;
+  border: 2px solid #e2ddd3;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #d92222;
+}
+
+/* KaTeX custom sizing inside brutalist containers */
+.katex {
+  font-size: 1.1em !important;
+}
+
+.katex-mathml {
+  display: none !important;
+}
+
+.katex-display {
+  margin: 0.5em 0 !important;
+}
+
+/* Subtle CRT Screen Turn-On / Flicker Animation */
+@keyframes crt-flicker {
+  0% { opacity: 0.97; }
+  50% { opacity: 1; }
+  100% { opacity: 0.98; }
+}
+
+.crt-screen-container {
+  animation: crt-flicker 0.15s infinite;
+}
