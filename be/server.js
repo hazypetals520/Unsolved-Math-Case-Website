@@ -137,7 +137,7 @@ app.post('/api/students/:presensiNumber/unblock', async (req, res) => {
   }
 });
 
-// POST Admin Reset Student
+// POST Admin Reset Student (kept as a backend-only control; no visible UI button)
 app.post('/api/students/:presensiNumber/reset', async (req, res) => {
   try {
     const cleanPresensi = String(req.params.presensiNumber).trim();

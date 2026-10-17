@@ -290,23 +290,30 @@ async function resetStudent(presensiNumber) {
 
   const now = new Date().toISOString();
 
+  // Reset only the exam state. Keep the student's block status and violation record
+  // intact so admin can still decide whether to release them later.
   await client.execute({
     sql: `
       UPDATE students
-      SET violations_count = 0,
-          violation_history = '[]',
-          is_blocked = 0,
-          case_statuses = '{}',
+      SET case_statuses = '{}',
           attempts = '{}',
           score = 0,
           accuracy = 0,
           total_attempted = 0,
           is_finished = 0,
-          unblocked_at = ?,
-          last_active_at = ?
+          last_active_at = ?,
+          is_blocked = ?,
+          violations_count = ?,
+          violation_history = ?
       WHERE presensi_number = ?
     `,
-    args: [now, now, cleanPresensi],
+    args: [
+      now,
+      student.isBlocked ? 1 : 0,
+      student.violationsCount,
+      JSON.stringify(student.violationHistory),
+      cleanPresensi,
+    ],
   });
 
   return getStudent(cleanPresensi);
