@@ -148,6 +148,8 @@ export function App() {
   const lastViolationTimeRef = useRef<number>(0);
   const lastCaseAdvanceTimeRef = useRef<number>(0);
   const activeQuestionTransitionRef = useRef<boolean>(false);
+  const studentProgressVersionRef = useRef<number>(0);
+  const pendingProgressSyncsRef = useRef<number>(0);
   const initialHeightRef = useRef<number>(window.innerHeight);
   const isFullscreenActiveRef = useRef<boolean>(false);
 
@@ -210,6 +212,7 @@ export function App() {
   }, []);
 
   const resetStudentExamState = useCallback(() => {
+    studentProgressVersionRef.current += 1;
     setCaseStatuses({});
     setAttempts({});
     setIsQuizFinished(false);
@@ -223,6 +226,7 @@ export function App() {
   }, []);
 
   const handleDeletedStudentSession = useCallback(() => {
+    studentProgressVersionRef.current += 1;
     setProfile(null);
     setPhase('landing');
     setCaseStatuses({});
@@ -358,6 +362,9 @@ export function App() {
     if (currentView === 'admin' || !profile?.presensiNumber) return;
 
     const syncStudentStateFromServer = async () => {
+      if (pendingProgressSyncsRef.current > 0) return;
+      const requestedProgressVersion = studentProgressVersionRef.current;
+
       try {
         const res = await fetch(`${API_BASE}/students/${profile.presensiNumber}/status`, {
           headers: profile.sessionToken ? { 'x-student-session': profile.sessionToken } : undefined,
@@ -371,6 +378,12 @@ export function App() {
         }
 
         const data = await res.json();
+        if (
+          requestedProgressVersion !== studentProgressVersionRef.current ||
+          pendingProgressSyncsRef.current > 0
+        ) {
+          return;
+        }
         if (data.sessionToken && data.sessionToken !== profile.sessionToken) {
           handleDeletedStudentSession();
           return;
@@ -712,6 +725,7 @@ export function App() {
 
   // Case resolution handler (evaluation complete)
   const handleResolveCase = (attempt: CaseAttempt) => {
+    studentProgressVersionRef.current += 1;
     const nextAttempts = {
       ...attempts,
       [attempt.questionId]: attempt,
@@ -732,6 +746,7 @@ export function App() {
 
     // Sync progress to backend
     if (profile?.presensiNumber) {
+      pendingProgressSyncsRef.current += 1;
       fetch(`${API_BASE}/students/progress`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -753,6 +768,9 @@ export function App() {
         })
         .catch((error) => {
           console.error('[PROGRESS] Failed to sync student progress:', error);
+        })
+        .finally(() => {
+          pendingProgressSyncsRef.current = Math.max(0, pendingProgressSyncsRef.current - 1);
         });
     }
   };
