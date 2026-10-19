@@ -88,10 +88,12 @@ export function AdminDashboard({ onBackToStudent }: AdminDashboardProps) {
 
   // Poll server every 2 seconds for live real-time exam monitoring
   useEffect(() => {
+    if (!isAuthenticated) return;
+
     fetchStudents();
     const interval = setInterval(fetchStudents, 2000);
     return () => clearInterval(interval);
-  }, [fetchStudents]);
+  }, [fetchStudents, isAuthenticated]);
 
   // Also listen to BroadcastChannel for instant local updates across tabs
   useEffect(() => {

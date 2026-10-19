@@ -35,6 +35,9 @@ export function AdminLogin({ onLoginSuccess, onBackToStudent }: AdminLoginProps)
       });
       const result = await response.json();
       if (!response.ok) {
+        if (response.status === 503) {
+          throw new Error('Server aktif, tetapi autentikasi admin belum dikonfigurasi. Atur ADMIN_PASSWORD dan ADMIN_SESSION_SECRET di Vercel.');
+        }
         throw new Error(result.error || `HTTP ${response.status}`);
       }
       if (typeof result.token !== 'string') {
