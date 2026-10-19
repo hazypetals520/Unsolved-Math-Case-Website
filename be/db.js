@@ -1,6 +1,7 @@
 const { createClient } = require('@libsql/client');
 const fs = require('fs');
 const path = require('path');
+const { randomBytes } = require('crypto');
 
 // Load .env.local first if present, otherwise fallback to .env
 const envLocalPath = path.join(__dirname, '.env.local');
@@ -42,7 +43,8 @@ async function initDb() {
         score INTEGER NOT NULL DEFAULT 0,
         accuracy INTEGER NOT NULL DEFAULT 0,
         total_attempted INTEGER NOT NULL DEFAULT 0,
-        is_finished INTEGER NOT NULL DEFAULT 0
+        is_finished INTEGER NOT NULL DEFAULT 0,
+        session_token TEXT
       );`,
       `CREATE TABLE IF NOT EXISTS shell_sessions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -82,6 +84,10 @@ async function initDb() {
       `CREATE INDEX IF NOT EXISTS idx_shell_commands_executed_at ON shell_commands(executed_at);`,
       `CREATE INDEX IF NOT EXISTS idx_shell_audit_presensi ON shell_audit_alerts(presensi_number);`
     ], 'write');
+    const studentColumns = await client.execute('PRAGMA table_info(students)');
+    if (!studentColumns.rows.some((column) => column.name === 'session_token')) {
+      await client.execute('ALTER TABLE students ADD COLUMN session_token TEXT');
+    }
     console.log('[TURSO DB] All schemas (students + shell) initialized successfully.');
   } catch (err) {
     console.error('[TURSO DB] Error initializing schema:', err);
@@ -137,42 +143,86 @@ async function getStudent(presensiNumber) {
   return mapRowToStudent(result.rows[0]);
 }
 
+async function getAvailablePresensiNumbers() {
+  const result = await client.execute('SELECT presensi_number FROM students');
+  const occupied = new Set(
+    result.rows
+      .map((row) => Number.parseInt(String(row.presensi_number), 10))
+      .filter((number) => Number.isInteger(number) && number >= 1 && number <= 36)
+  );
+  return Array.from({ length: 36 }, (_, index) => index + 1)
+    .filter((number) => !occupied.has(number))
+    .map((number) => String(number).padStart(2, '0'));
+}
+
 async function upsertStudentLogin(presensiNumber, fullName) {
-  const cleanPresensi = String(presensiNumber).trim();
+  const requestedNumber = Number.parseInt(String(presensiNumber).trim(), 10);
+  if (!Number.isInteger(requestedNumber) || requestedNumber < 1 || requestedNumber > 36) {
+    throw new Error('Invalid presensi number');
+  }
+
+  const cleanPresensi = String(requestedNumber).padStart(2, '0');
   const cleanName = String(fullName).trim();
+  if (!cleanName) {
+    throw new Error('Full name is required');
+  }
+  const sessionToken = randomBytes(32).toString('base64url');
   const now = new Date().toISOString();
 
-  const existing = await getStudent(cleanPresensi);
+  const existingNumbers = await client.execute('SELECT presensi_number FROM students');
+  const alreadyOccupied = existingNumbers.rows.some(
+    (row) => Number.parseInt(String(row.presensi_number), 10) === requestedNumber
+  );
+  if (alreadyOccupied) {
+    const error = new Error('Presensi number is already in use');
+    error.code = 'PRESENSI_TAKEN';
+    throw error;
+  }
 
-  if (!existing) {
-    await client.execute({
+  try {
+    const result = await client.execute({
       sql: `
         INSERT INTO students (
           presensi_number, full_name, logged_in_at, last_active_at,
           violations_count, violation_history, is_blocked, unblocked_at,
-          case_statuses, attempts, score, accuracy, total_attempted, is_finished
-        ) VALUES (?, ?, ?, ?, 0, '[]', 0, NULL, '{}', '{}', 0, 0, 0, 0)
+          case_statuses, attempts, score, accuracy, total_attempted, is_finished, session_token
+        ) VALUES (?, ?, ?, ?, 0, '[]', 0, NULL, '{}', '{}', 0, 0, 0, 0, ?)
       `,
-      args: [cleanPresensi, cleanName, now, now],
+      args: [cleanPresensi, cleanName, now, now, sessionToken],
     });
-    return getStudent(cleanPresensi);
-  } else {
-    await client.execute({
-      sql: `
-        UPDATE students
-        SET full_name = ?, last_active_at = ?
-        WHERE presensi_number = ?
-      `,
-      args: [cleanName, now, cleanPresensi],
-    });
-    return getStudent(cleanPresensi);
+  } catch (error) {
+    if (
+      String(error.message).includes('UNIQUE constraint failed') ||
+      String(error.code).startsWith('SQLITE_CONSTRAINT')
+    ) {
+      const conflict = new Error('Presensi number is already in use');
+      conflict.code = 'PRESENSI_TAKEN';
+      throw conflict;
+    }
+    throw error;
   }
+
+  return { ...(await getStudent(cleanPresensi)), sessionToken };
 }
 
-async function updateStudentProgress(presensiNumber, { caseStatuses, attempts, isFinished }) {
+async function getStudentSession(presensiNumber, sessionToken) {
+  const clean = String(presensiNumber).trim();
+  const result = await client.execute({
+    sql: 'SELECT session_token FROM students WHERE presensi_number = ?',
+    args: [clean],
+  });
+  if (result.rows.length === 0) return null;
+  const storedToken = result.rows[0].session_token;
+  if (storedToken && storedToken !== sessionToken) return null;
+  return { sessionToken: storedToken || null };
+}
+
+async function updateStudentProgress(presensiNumber, sessionToken, { caseStatuses, attempts, isFinished }) {
   const cleanPresensi = String(presensiNumber).trim();
   const student = await getStudent(cleanPresensi);
   if (!student) return null;
+  const session = await getStudentSession(cleanPresensi, sessionToken);
+  if (!session || (session.sessionToken && !sessionToken)) return null;
 
   const newCaseStatuses = { ...student.caseStatuses, ...(caseStatuses || {}) };
   const newAttempts = { ...student.attempts, ...(attempts || {}) };
@@ -186,7 +236,7 @@ async function updateStudentProgress(presensiNumber, { caseStatuses, attempts, i
   const finished = isFinished || totalAttempted >= 10 || student.isFinished ? 1 : 0;
   const now = new Date().toISOString();
 
-  await client.execute({
+  const result = await client.execute({
     sql: `
       UPDATE students
       SET case_statuses = ?,
@@ -196,7 +246,7 @@ async function updateStudentProgress(presensiNumber, { caseStatuses, attempts, i
           total_attempted = ?,
           is_finished = ?,
           last_active_at = ?
-      WHERE presensi_number = ?
+      WHERE presensi_number = ? AND session_token IS ?
     `,
     args: [
       JSON.stringify(newCaseStatuses),
@@ -207,16 +257,20 @@ async function updateStudentProgress(presensiNumber, { caseStatuses, attempts, i
       finished,
       now,
       cleanPresensi,
+      session.sessionToken,
     ],
   });
 
+  if (result.rowsAffected === 0) return null;
   return getStudent(cleanPresensi);
 }
 
-async function recordViolation(presensiNumber, reason) {
+async function recordViolation(presensiNumber, sessionToken, reason) {
   const cleanPresensi = String(presensiNumber).trim();
   const student = await getStudent(cleanPresensi);
   if (!student) return null;
+  const session = await getStudentSession(cleanPresensi, sessionToken);
+  if (!session || (session.sessionToken && !sessionToken)) return null;
 
   // Jika siswa sudah menyelesaikan kuis, jangan catat pelanggaran baru
   if (student.isFinished) {
@@ -234,7 +288,7 @@ async function recordViolation(presensiNumber, reason) {
   const isBlocked = newViolationsCount >= 2 ? 1 : 0;
   const now = new Date().toISOString();
 
-  await client.execute({
+  const result = await client.execute({
     sql: `
       UPDATE students
       SET violations_count = ?,
@@ -242,11 +296,12 @@ async function recordViolation(presensiNumber, reason) {
           is_blocked = ?,
           unblocked_at = NULL,
           last_active_at = ?
-      WHERE presensi_number = ?
+      WHERE presensi_number = ? AND session_token IS ?
     `,
-    args: [newViolationsCount, JSON.stringify(newHistory), isBlocked, now, cleanPresensi],
+    args: [newViolationsCount, JSON.stringify(newHistory), isBlocked, now, cleanPresensi, session.sessionToken],
   });
 
+  if (result.rowsAffected === 0) return null;
   return {
     violationsCount: newViolationsCount,
     isBlocked: Boolean(isBlocked),
@@ -338,6 +393,8 @@ module.exports = {
   initDb,
   getAllStudents,
   getStudent,
+  getStudentSession,
+  getAvailablePresensiNumbers,
   upsertStudentLogin,
   updateStudentProgress,
   recordViolation,

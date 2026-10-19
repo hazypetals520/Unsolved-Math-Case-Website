@@ -35,9 +35,10 @@ const API_BASE = (
 ).replace(/\/+$/, '');
 
 export function AdminDashboard({ onBackToStudent }: AdminDashboardProps) {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    return sessionStorage.getItem('cyber_admin_auth') === 'authenticated';
+  const [adminToken, setAdminToken] = useState<string | null>(() => {
+    return sessionStorage.getItem('cyber_admin_auth');
   });
+  const isAuthenticated = Boolean(adminToken);
 
   const [students, setStudents] = useState<StudentRecord[]>([]);
   const [selectedStudent, setSelectedStudent] = useState<StudentRecord | null>(null);
@@ -47,6 +48,11 @@ export function AdminDashboard({ onBackToStudent }: AdminDashboardProps) {
   const [lastSyncedTime, setLastSyncedTime] = useState<string>('');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isClearingStudents, setIsClearingStudents] = useState(false);
+  const [deletingStudent, setDeletingStudent] = useState<string | null>(null);
+  const adminHeaders = useCallback(
+    () => ({ Authorization: `Bearer ${adminToken || ''}` }),
+    [adminToken]
+  );
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -58,7 +64,15 @@ export function AdminDashboard({ onBackToStudent }: AdminDashboardProps) {
   // Fetch students from backend
   const fetchStudents = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/students`);
+      const res = await fetch(`${API_BASE}/students`, {
+        headers: adminHeaders(),
+      });
+      if (res.status === 401) {
+        sessionStorage.removeItem('cyber_admin_auth');
+        setAdminToken(null);
+        showToast('Sesi admin berakhir. Silakan masuk kembali.');
+        return;
+      }
       if (res.ok) {
         const data = await res.json();
         setStudents(data);
@@ -70,7 +84,7 @@ export function AdminDashboard({ onBackToStudent }: AdminDashboardProps) {
     } catch {
       setIsServerConnected(false);
     }
-  }, []);
+  }, [adminHeaders]);
 
   // Poll server every 2 seconds for live real-time exam monitoring
   useEffect(() => {
@@ -97,6 +111,7 @@ export function AdminDashboard({ onBackToStudent }: AdminDashboardProps) {
     try {
       const res = await fetch(`${API_BASE}/students/${presensiNumber}/unblock`, {
         method: 'POST',
+        headers: adminHeaders(),
       });
       if (res.ok) {
         const data = await res.json();
@@ -128,6 +143,7 @@ export function AdminDashboard({ onBackToStudent }: AdminDashboardProps) {
     try {
       const res = await fetch(`${API_BASE}/students/${presensiNumber}/reset`, {
         method: 'POST',
+        headers: adminHeaders(),
       });
       if (res.ok) {
         const data = await res.json();
@@ -164,6 +180,7 @@ export function AdminDashboard({ onBackToStudent }: AdminDashboardProps) {
     try {
       const res = await fetch(`${API_BASE}/students/clear-all`, {
         method: 'POST',
+        headers: adminHeaders(),
       });
       if (!res.ok) {
         showToast('Gagal membersihkan data siswa: backend menolak permintaan');
@@ -181,6 +198,45 @@ export function AdminDashboard({ onBackToStudent }: AdminDashboardProps) {
       showToast('Gagal membersihkan data siswa: Backend tidak merespon');
     } finally {
       setIsClearingStudents(false);
+    }
+  };
+
+  const handleDeleteStudent = async (student: StudentRecord) => {
+    if (deletingStudent) return;
+    const confirmed = window.confirm(
+      `Hapus data ${student.fullName} (presensi #${student.presensiNumber})? Nomor ini akan tersedia kembali.`
+    );
+    if (!confirmed) return;
+
+    setDeletingStudent(student.presensiNumber);
+    try {
+      const res = await fetch(`${API_BASE}/students/${encodeURIComponent(student.presensiNumber)}`, {
+        method: 'DELETE',
+        headers: adminHeaders(),
+      });
+      if (!res.ok) {
+        showToast(res.status === 404
+          ? 'Data siswa sudah tidak ditemukan.'
+          : 'Gagal menghapus data siswa: backend menolak permintaan.');
+        return;
+      }
+
+      setStudents((current) => current.filter((item) => item.presensiNumber !== student.presensiNumber));
+      if (selectedStudent?.presensiNumber === student.presensiNumber) {
+        setSelectedStudent(null);
+      }
+      showToast(`Data ${student.fullName} berhasil dihapus. Presensi #${student.presensiNumber} kini tersedia.`);
+      if (typeof BroadcastChannel !== 'undefined') {
+        const channel = new BroadcastChannel('cyber_exam_channel');
+        channel.postMessage({ type: 'STUDENT_DELETED', presensiNumber: student.presensiNumber });
+        channel.close();
+      }
+      await fetchStudents();
+    } catch (err) {
+      console.error('Gagal menghapus data siswa:', err);
+      showToast('Gagal menghapus data siswa: Backend tidak merespon.');
+    } finally {
+      setDeletingStudent(null);
     }
   };
 
@@ -247,12 +303,18 @@ export function AdminDashboard({ onBackToStudent }: AdminDashboardProps) {
   const inProgressCount = students.filter((s) => !s.isFinished && !s.isBlocked).length;
 
   if (!isAuthenticated) {
-    return <AdminLogin onLoginSuccess={() => setIsAuthenticated(true)} onBackToStudent={onBackToStudent} />;
+    return <AdminLogin
+      onLoginSuccess={(token) => {
+        sessionStorage.setItem('cyber_admin_auth', token);
+        setAdminToken(token);
+      }}
+      onBackToStudent={onBackToStudent}
+    />;
   }
 
   const handleLogout = () => {
     sessionStorage.removeItem('cyber_admin_auth');
-    setIsAuthenticated(false);
+    setAdminToken(null);
   };
 
   return (
@@ -591,6 +653,15 @@ export function AdminDashboard({ onBackToStudent }: AdminDashboardProps) {
                               <span>DETAIL</span>
                             </button>
 
+                            <button
+                              onClick={() => handleDeleteStudent(s)}
+                              disabled={deletingStudent !== null}
+                              className="bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white px-2 py-1 brutal-border brutal-shadow-sm font-bold text-[10.5px] uppercase flex items-center gap-1 cursor-pointer"
+                              title={`Hapus data presensi #${s.presensiNumber} dan bebaskan nomor`}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              <span>{deletingStudent === s.presensiNumber ? 'HAPUS...' : 'HAPUS'}</span>
+                            </button>
                           </div>
                         </td>
                       </tr>

@@ -2,11 +2,18 @@ import { useState, type FormEvent } from 'react';
 import { ShieldAlert, KeyRound, Eye, EyeOff, Terminal, ArrowRight, Lock, AlertTriangle, ArrowLeft } from 'lucide-react';
 
 interface AdminLoginProps {
-  onLoginSuccess: () => void;
+  onLoginSuccess: (token: string) => void;
   onBackToStudent?: () => void;
 }
 
-const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || 'chrysaloki2949';
+const configuredApiUrl = import.meta.env.VITE_API_URL;
+const isLocalApiUrl = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/|$)/i.test(configuredApiUrl || '');
+const API_BASE = (
+  import.meta.env.PROD && isLocalApiUrl
+    ? '/api'
+    : configuredApiUrl ||
+      (typeof window !== 'undefined' && window.location.hostname !== 'localhost' ? '/api' : 'http://localhost:3001/api')
+).replace(/\/+$/, '');
 
 export function AdminLogin({ onLoginSuccess, onBackToStudent }: AdminLoginProps) {
   const [password, setPassword] = useState('');
@@ -15,23 +22,37 @@ export function AdminLogin({ onLoginSuccess, onBackToStudent }: AdminLoginProps)
   const [isLoading, setIsLoading] = useState(false);
   const [shake, setShake] = useState(false);
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
     setIsLoading(true);
 
-    setTimeout(() => {
-      if (password.trim() === ADMIN_PASSWORD) {
-        setIsLoading(false);
-        sessionStorage.setItem('cyber_admin_auth', 'authenticated');
-        onLoginSuccess();
-      } else {
-        setIsLoading(false);
-        setError('AKSES DITOLAK: Passcode otentikasi tidak valid!');
-        setShake(true);
-        setTimeout(() => setShake(false), 500);
+    try {
+      const response = await fetch(`${API_BASE}/admin/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || `HTTP ${response.status}`);
       }
-    }, 400);
+      if (typeof result.token !== 'string') {
+        throw new Error('Server tidak mengembalikan sesi admin yang valid.');
+      }
+      onLoginSuccess(result.token);
+    } catch (loginError) {
+      console.error('[ADMIN] Gagal melakukan autentikasi:', loginError);
+      setError(loginError instanceof Error && loginError.message.includes('HTTP')
+        ? `AKSES DITOLAK: ${loginError.message}`
+        : loginError instanceof Error
+        ? loginError.message
+        : 'Akses admin gagal. Periksa koneksi server.');
+      setShake(true);
+      setTimeout(() => setShake(false), 500);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (

@@ -101,9 +101,19 @@ export function App() {
 
   // Modals
   const [isCredentialsOpen, setIsCredentialsOpen] = useState<boolean>(false);
+  const [availablePresensiNumbers, setAvailablePresensiNumbers] = useState<string[] | null>(null);
+  const [availabilityError, setAvailabilityError] = useState<string | null>(null);
+  const [availabilityRefreshKey, setAvailabilityRefreshKey] = useState(0);
   const [activeQuestion, setActiveQuestion] = useState<QuizQuestion | null>(null);
   const [isManualOpen, setIsManualOpen] = useState<boolean>(false);
-  const [isReportOpen, setIsReportOpen] = useState<boolean>(false);
+  const [isReportOpen, setIsReportOpen] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('unsolved_math_finished') === 'true' &&
+        localStorage.getItem('unsolved_math_blocked') !== 'true';
+    } catch {
+      return false;
+    }
+  });
   const [isAntiCheatOpen, setIsAntiCheatOpen] = useState<boolean>(false);
 
   // Finished Quiz State
@@ -212,6 +222,62 @@ export function App() {
     localStorage.setItem('unsolved_math_finished', 'false');
   }, []);
 
+  const handleDeletedStudentSession = useCallback(() => {
+    setProfile(null);
+    setPhase('landing');
+    setCaseStatuses({});
+    setAttempts({});
+    setIsQuizFinished(false);
+    setViolationsCount(0);
+    setIsBlockedByViolation(false);
+    setIsReportOpen(false);
+    setIsCredentialsOpen(false);
+    setActiveQuestion(null);
+    setIsAntiCheatOpen(false);
+    setIsUnblockedModalOpen(false);
+    localStorage.removeItem('unsolved_math_profile');
+    localStorage.removeItem('unsolved_math_statuses');
+    localStorage.removeItem('unsolved_math_attempts');
+    localStorage.removeItem('unsolved_math_finished');
+    localStorage.removeItem('unsolved_math_violations');
+    localStorage.removeItem('unsolved_math_blocked');
+  }, []);
+
+  useEffect(() => {
+    if (!isCredentialsOpen) return;
+
+    let isActive = true;
+    const refreshAvailability = async () => {
+      try {
+        const response = await fetch(`${API_BASE}/students/available-presensi`);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        const numbers: unknown = await response.json();
+        if (!Array.isArray(numbers) || !numbers.every((number) => typeof number === 'string')) {
+          throw new Error('Respons nomor presensi tidak valid');
+        }
+        if (isActive) {
+          setAvailablePresensiNumbers(numbers);
+          setAvailabilityError(null);
+        }
+      } catch (error) {
+        console.error('[LOGIN] Gagal memuat nomor presensi tersedia:', error);
+        if (isActive) {
+          setAvailablePresensiNumbers(null);
+          setAvailabilityError('Gagal memuat daftar.');
+        }
+      }
+    };
+
+    refreshAvailability();
+    const interval = setInterval(refreshAvailability, 5000);
+    return () => {
+      isActive = false;
+      clearInterval(interval);
+    };
+  }, [isCredentialsOpen, availabilityRefreshKey]);
+
   // Unified violation trigger with 1500ms cooldown to prevent multi-event duplicate triggers
   const triggerViolation = useCallback(
     (reason: string) => {
@@ -233,6 +299,7 @@ export function App() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             presensiNumber: profile.presensiNumber,
+            sessionToken: profile.sessionToken,
             reason,
           }),
         })
@@ -292,14 +359,31 @@ export function App() {
 
     const syncStudentStateFromServer = async () => {
       try {
-        const res = await fetch(`${API_BASE}/students/${profile.presensiNumber}/status`);
-        if (!res.ok) return;
+        const res = await fetch(`${API_BASE}/students/${profile.presensiNumber}/status`, {
+          headers: profile.sessionToken ? { 'x-student-session': profile.sessionToken } : undefined,
+        });
+        if (res.status === 404) {
+          handleDeletedStudentSession();
+          return;
+        }
+        if (!res.ok) {
+          throw new Error(`Status check failed with HTTP ${res.status}`);
+        }
 
         const data = await res.json();
+        if (data.sessionToken && data.sessionToken !== profile.sessionToken) {
+          handleDeletedStudentSession();
+          return;
+        }
         const serverAttempts = data.attempts || {};
         const serverStatuses = data.caseStatuses || {};
         const serverFinished = Boolean(data.isFinished);
         const serverIsBlocked = Boolean(data.isBlocked);
+        if (serverFinished && !isQuizFinished && !serverIsBlocked) {
+          setActiveQuestion(null);
+          setOpenedFromReport(false);
+          setIsReportOpen(true);
+        }
         const serverViolationsCount = typeof data.violationsCount === 'number' ? data.violationsCount : violationsCount;
         const localHasProgress = Object.keys(attempts).length > 0 || Object.keys(caseStatuses).length > 0 || isQuizFinished;
         const serverResetDetected =
@@ -335,8 +419,8 @@ export function App() {
           localStorage.setItem('unsolved_math_statuses', JSON.stringify(serverStatuses));
           localStorage.setItem('unsolved_math_finished', String(serverFinished));
         }
-      } catch {
-        // Backend offline or unreachable
+      } catch (error) {
+        console.error('[SESSION] Gagal memeriksa status siswa:', error);
       }
     };
 
@@ -352,7 +436,8 @@ export function App() {
           msg === 'unblock' ||
           msg === 'reset' ||
           msg?.type === 'UNBLOCKED' ||
-          msg?.type === 'RESET'
+          msg?.type === 'RESET' ||
+          (msg?.type === 'STUDENT_DELETED' && msg.presensiNumber === profile.presensiNumber)
         ) {
           if (msg === 'reset' || msg?.type === 'RESET') {
             resetStudentExamState();
@@ -366,7 +451,7 @@ export function App() {
       clearInterval(interval);
       if (channel) channel.close();
     };
-  }, [currentView, profile, attempts, caseStatuses, isQuizFinished, isBlockedByViolation, violationsCount, resetStudentExamState]);
+  }, [currentView, profile, attempts, caseStatuses, isQuizFinished, isBlockedByViolation, violationsCount, resetStudentExamState, handleDeletedStudentSession]);
 
   // Poll backend if blocked to automatically unblock when admin clicks 'Lepaskan'
   useEffect(() => {
@@ -376,7 +461,13 @@ export function App() {
 
     const checkStatus = async () => {
       try {
-        const res = await fetch(`${API_BASE}/students/${profile.presensiNumber}/status`);
+        const res = await fetch(`${API_BASE}/students/${profile.presensiNumber}/status`, {
+          headers: profile.sessionToken ? { 'x-student-session': profile.sessionToken } : undefined,
+        });
+        if (res.status === 404) {
+          handleDeletedStudentSession();
+          return;
+        }
         if (res.ok) {
           const data = await res.json();
           if (
@@ -391,6 +482,7 @@ export function App() {
             setIsReportOpen(false);
             setIsAntiCheatOpen(false);
             setIsQuizFinished(Boolean(data.isFinished));
+            setIsReportOpen(Boolean(data.isFinished));
 
             localStorage.setItem('unsolved_math_violations', currentViolations.toString());
             localStorage.setItem('unsolved_math_blocked', 'false');
@@ -432,8 +524,8 @@ export function App() {
             }
           }
         }
-      } catch {
-        // Backend offline or unreachable
+      } catch (error) {
+        console.error('[SESSION] Gagal memeriksa status pemblokiran:', error);
       }
     };
 
@@ -463,7 +555,7 @@ export function App() {
       clearInterval(interval);
       if (channel) channel.close();
     };
-  }, [isBlockedByViolation, profile, currentView, resetStudentExamState]);
+  }, [isBlockedByViolation, profile, currentView, resetStudentExamState, handleDeletedStudentSession]);
 
   // Security event listeners: active during desktop phase until all cases completed
   useEffect(() => {
@@ -562,26 +654,48 @@ export function App() {
   };
 
   // Login Handler
-  const handleLogin = (newProfile: InvestigatorProfile) => {
-    setProfile(newProfile);
-    setIsCredentialsOpen(false);
-    setPhase('desktop');
-
-    // Notify backend
-    fetch(`${API_BASE}/students/login`, {
+  const handleLogin = async (newProfile: InvestigatorProfile) => {
+    const response = await fetch(`${API_BASE}/students/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         fullName: newProfile.fullName,
         presensiNumber: newProfile.presensiNumber,
       }),
-    })
-      .then(() => {
-        if (typeof BroadcastChannel !== 'undefined') {
-          new BroadcastChannel('cyber_exam_channel').postMessage('login');
-        }
-      })
-      .catch(() => {});
+    });
+    if (!response.ok) {
+      if (response.status === 409) {
+        setAvailabilityRefreshKey((key) => key + 1);
+        throw new Error('Nomor presensi ini baru saja dipakai. Pilih nomor lain.');
+      }
+      throw new Error(`Gagal mendaftarkan siswa (HTTP ${response.status}).`);
+    }
+    const result: unknown = await response.json();
+    if (
+      typeof result !== 'object' ||
+      result === null ||
+      !('sessionToken' in result) ||
+      typeof result.sessionToken !== 'string'
+    ) {
+      throw new Error('Server tidak mengembalikan token sesi siswa yang valid.');
+    }
+
+    const authenticatedProfile = { ...newProfile, sessionToken: result.sessionToken };
+    setCaseStatuses({});
+    setAttempts({});
+    setIsQuizFinished(false);
+    setViolationsCount(0);
+    setIsBlockedByViolation(false);
+    setIsReportOpen(false);
+    setProfile(authenticatedProfile);
+    setIsCredentialsOpen(false);
+    setPhase('desktop');
+
+    if (typeof BroadcastChannel !== 'undefined') {
+      const channel = new BroadcastChannel('cyber_exam_channel');
+      channel.postMessage('login');
+      channel.close();
+    }
 
     // Request fullscreen on user gesture for secure test environment
     if (document.documentElement.requestFullscreen) {
@@ -609,6 +723,12 @@ export function App() {
 
     setAttempts(nextAttempts);
     setCaseStatuses(nextStatuses);
+    if (Object.keys(nextAttempts).length >= QUIZ_QUESTIONS.length) {
+      setActiveQuestion(null);
+      setOpenedFromReport(false);
+      sound.playGodmode();
+      setIsReportOpen(true);
+    }
 
     // Sync progress to backend
     if (profile?.presensiNumber) {
@@ -617,6 +737,7 @@ export function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           presensiNumber: profile.presensiNumber,
+          sessionToken: profile.sessionToken,
           caseStatuses: nextStatuses,
           attempts: nextAttempts,
           isFinished: Object.keys(nextAttempts).length >= QUIZ_QUESTIONS.length,
@@ -709,7 +830,6 @@ export function App() {
           solvedCount={solvedCount}
           failedCount={failedCount}
           totalQuestions={QUIZ_QUESTIONS.length}
-          onOpenReport={() => setIsReportOpen(true)}
           onOpenManual={() => setIsManualOpen(true)}
         />
       )}
@@ -723,8 +843,6 @@ export function App() {
           caseStatuses={caseStatuses}
           onOpenFile={(q) => setActiveQuestion(q)}
           onOpenManual={() => setIsManualOpen(true)}
-          onOpenReport={() => setIsReportOpen(true)}
-          allAttempted={allAttempted}
         />
       )}
 
@@ -733,6 +851,8 @@ export function App() {
         isOpen={isCredentialsOpen}
         onLogin={handleLogin}
         onCancel={() => setIsCredentialsOpen(false)}
+        availablePresensiNumbers={availablePresensiNumbers}
+        availabilityError={availabilityError}
       />
 
       {/* Case Question File Modal */}

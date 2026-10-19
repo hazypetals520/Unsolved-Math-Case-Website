@@ -8,7 +8,6 @@ import {
   Trash2, 
   FileQuestion,
   HelpCircle,
-  Archive,
   Info
 } from 'lucide-react';
 import { sound } from '../utils/sound';
@@ -18,8 +17,6 @@ interface DesktopScreenProps {
   caseStatuses: Record<number, CaseStatus>;
   onOpenFile: (question: QuizQuestion) => void;
   onOpenManual: () => void;
-  onOpenReport: () => void;
-  allAttempted: boolean;
 }
 
 export const DesktopScreen: React.FC<DesktopScreenProps> = ({
@@ -27,8 +24,6 @@ export const DesktopScreen: React.FC<DesktopScreenProps> = ({
   caseStatuses,
   onOpenFile,
   onOpenManual,
-  onOpenReport,
-  allAttempted,
 }) => {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -190,24 +185,11 @@ export const DesktopScreen: React.FC<DesktopScreenProps> = ({
           </button>
         </div>
 
-        {allAttempted ? (
-          <button
-            onClick={() => {
-              sound.playGodmode();
-              onOpenReport();
-            }}
-            className="flex items-center gap-1.5 bg-red-600 hover:bg-red-500 text-white px-2 sm:px-3 py-0.5 sm:py-1 brutal-border-2 brutal-shadow font-bold animate-bounce cursor-pointer text-[9.5px] sm:text-[11px]"
-          >
-            <Archive className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-            <span>SEMUA SELESAI: LIHAT LAPORAN AKHIR</span>
-          </button>
-        ) : (
-          <div className="flex items-center gap-1 text-neutral-700 text-[9px] sm:text-[10px]">
-            <FileQuestion className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-neutral-500" />
-            <span className="hidden sm:inline">Pilih salah satu dari 10 berkas untuk penyelidikan.</span>
-            <span className="sm:hidden">Pilih berkas untuk mulai.</span>
-          </div>
-        )}
+        <div className="flex items-center gap-1 text-neutral-700 text-[9px] sm:text-[10px]">
+          <FileQuestion className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-neutral-500" />
+          <span className="hidden sm:inline">Pilih salah satu dari 10 berkas untuk penyelidikan.</span>
+          <span className="sm:hidden">Pilih berkas untuk mulai.</span>
+        </div>
       </div>
     </div>
   );

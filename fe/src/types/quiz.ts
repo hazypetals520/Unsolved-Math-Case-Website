@@ -81,4 +81,5 @@ export interface InvestigatorProfile {
   fullName: string;
   presensiNumber: string;
   loggedInAt: string;
+  sessionToken?: string;
 }

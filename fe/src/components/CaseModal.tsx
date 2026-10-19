@@ -713,22 +713,24 @@ export const CaseModal: React.FC<CaseModalProps> = ({
               </button>
             </>
           ) : (
-            <div className="w-full flex items-center justify-between gap-1.5 sm:gap-2">
+            <div className={`w-full flex items-center gap-1.5 sm:gap-2 ${hasNextCase ? 'justify-between' : ''}`}>
               <button
                 onClick={handleFinishAndClose}
-                className="w-1/2 sm:w-auto px-2 sm:px-5 py-2 sm:py-2.5 bg-white hover:bg-neutral-100 text-black font-mono-code font-bold text-[10px] sm:text-sm uppercase tracking-wider brutal-border-2 brutal-shadow-sm flex items-center justify-center gap-1 cursor-pointer truncate"
+                className={`${hasNextCase ? 'w-1/2 sm:w-auto' : 'w-full'} px-2 sm:px-5 py-2 sm:py-2.5 bg-white hover:bg-neutral-100 text-black font-mono-code font-bold text-[10px] sm:text-sm uppercase tracking-wider brutal-border-2 brutal-shadow-sm flex items-center justify-center gap-1 cursor-pointer truncate`}
               >
                 <span>KEMBALI KE DESKTOP</span>
               </button>
 
-              <button
-                onClick={handleFinishAndNext}
-                disabled={!isChecked}
-                className="w-1/2 sm:w-auto px-2 sm:px-6 py-2 sm:py-2.5 bg-red-600 hover:bg-red-500 disabled:opacity-60 disabled:cursor-not-allowed text-white font-mono-code font-bold text-[10px] sm:text-sm uppercase tracking-wider brutal-border-2 brutal-shadow brutal-shadow-active flex items-center justify-center gap-1 cursor-pointer truncate"
-              >
-                <span>{hasNextCase ? `SOAL BERIKUTNYA (#${question.id + 1})` : 'LIHAT LAPORAN AKHIR'}</span>
-                <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-              </button>
+              {hasNextCase && (
+                <button
+                  onClick={handleFinishAndNext}
+                  disabled={!isChecked}
+                  className="w-1/2 sm:w-auto px-2 sm:px-6 py-2 sm:py-2.5 bg-red-600 hover:bg-red-500 disabled:opacity-60 disabled:cursor-not-allowed text-white font-mono-code font-bold text-[10px] sm:text-sm uppercase tracking-wider brutal-border-2 brutal-shadow brutal-shadow-active flex items-center justify-center gap-1 cursor-pointer truncate"
+                >
+                  <span>SOAL BERIKUTNYA (#{question.id + 1})</span>
+                  <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+                </button>
+              )}
             </div>
           )}
         </div>

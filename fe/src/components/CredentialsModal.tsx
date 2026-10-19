@@ -5,19 +5,24 @@ import { sound } from '../utils/sound';
 
 interface CredentialsModalProps {
   isOpen: boolean;
-  onLogin: (profile: InvestigatorProfile) => void;
+  onLogin: (profile: InvestigatorProfile) => Promise<void>;
   onCancel: () => void;
+  availablePresensiNumbers: string[] | null;
+  availabilityError: string | null;
 }
 
 export const CredentialsModal: React.FC<CredentialsModalProps> = ({
   isOpen,
   onLogin,
   onCancel,
+  availablePresensiNumbers,
+  availabilityError,
 }) => {
   const [fullName, setFullName] = useState('');
   const [presensiNumber, setPresensiNumber] = useState('');
   const [showWarningModal, setShowWarningModal] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (!isOpen) return null;
 
@@ -29,10 +34,9 @@ export const CredentialsModal: React.FC<CredentialsModalProps> = ({
       return;
     }
 
-    const num = parseInt(presensiNumber, 10);
-    if (!presensiNumber.trim() || isNaN(num) || num < 1 || num > 36) {
+    if (!presensiNumber || !availablePresensiNumbers?.includes(presensiNumber)) {
       sound.playWrong();
-      setErrorMessage('Nomor Presensi tidak valid! Harus berupa angka antara 1 sampai 36.');
+      setErrorMessage('Pilih nomor presensi yang masih tersedia.');
       return;
     }
 
@@ -41,16 +45,22 @@ export const CredentialsModal: React.FC<CredentialsModalProps> = ({
     setShowWarningModal(true);
   };
 
-  const handleFinalConfirm = () => {
+  const handleFinalConfirm = async () => {
+    if (isSubmitting) return;
     sound.playWindowOpen();
-    const num = parseInt(presensiNumber, 10);
-    const cleanNumber = num < 10 ? `0${num}` : `${num}`;
-
-    onLogin({
-      fullName: fullName.trim(),
-      presensiNumber: cleanNumber,
-      loggedInAt: new Date().toISOString(),
-    });
+    setIsSubmitting(true);
+    try {
+      await onLogin({
+        fullName: fullName.trim(),
+        presensiNumber,
+        loggedInAt: new Date().toISOString(),
+      });
+    } catch (error) {
+      setShowWarningModal(false);
+      setErrorMessage(error instanceof Error ? error.message : 'Gagal mendaftarkan siswa.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -94,10 +104,11 @@ export const CredentialsModal: React.FC<CredentialsModalProps> = ({
             </button>
             <button
               type="button"
+              disabled={isSubmitting}
               onClick={handleFinalConfirm}
-              className="bg-red-600 hover:bg-red-500 text-white px-4 py-1.5 brutal-border-2 brutal-shadow font-bold text-xs tracking-wider cursor-pointer active:translate-x-0.5 active:translate-y-0.5"
+              className="bg-red-600 hover:bg-red-500 disabled:opacity-60 text-white px-4 py-1.5 brutal-border-2 brutal-shadow font-bold text-xs tracking-wider cursor-pointer active:translate-x-0.5 active:translate-y-0.5"
             >
-              I UNDERSTAND / PROCEED
+              {isSubmitting ? 'MEMERIKSA...' : 'I UNDERSTAND / PROCEED'}
             </button>
           </div>
         </div>
@@ -157,26 +168,36 @@ export const CredentialsModal: React.FC<CredentialsModalProps> = ({
                 <Hash className="w-3.5 h-3.5 text-neutral-700" />
                 Nomor Presensi (1 - 36):
               </label>
-              <input
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                maxLength={2}
+              <select
                 value={presensiNumber}
                 onChange={(e) => {
                   sound.playKey();
-                  // Only allow digits 0-9
-                  const numericOnly = e.target.value.replace(/\D/g, '').slice(0, 2);
-                  setPresensiNumber(numericOnly);
+                  setPresensiNumber(e.target.value);
                   if (errorMessage) setErrorMessage('');
                 }}
-                placeholder="Ketik angka 1 - 36..."
-                className="w-full bg-white text-black px-2.5 py-2 text-xs font-bold brutal-border-2 focus:outline-none focus:bg-amber-50"
-              />
+                disabled={!availablePresensiNumbers || availablePresensiNumbers.length === 0}
+                className="w-full bg-white text-black px-2.5 py-2 text-xs font-bold brutal-border-2 focus:outline-none focus:bg-amber-50 disabled:opacity-60"
+              >
+                <option value="">
+                  {availabilityError
+                    ? 'Nomor presensi tidak dapat dimuat'
+                    : availablePresensiNumbers === null
+                    ? 'Memuat nomor presensi...'
+                    : availablePresensiNumbers.length === 0
+                    ? 'Semua nomor sedang digunakan'
+                    : 'Pilih nomor presensi...'}
+                </option>
+                {availablePresensiNumbers?.map((number) => (
+                  <option key={number} value={number}>
+                    {Number(number)}
+                  </option>
+                ))}
+              </select>
               <div className="flex justify-between items-center text-[10px] text-neutral-500 mt-1 font-mono">
-                <span>Hanya boleh angka 1 sampai 36</span>
-                {presensiNumber && (parseInt(presensiNumber, 10) < 1 || parseInt(presensiNumber, 10) > 36) && (
-                  <span className="text-red-600 font-bold animate-pulse">Wajib 1 - 36!</span>
+                <span>Nomor aktif tidak dapat dipilih siswa lain.</span>
+                {availabilityError && <span className="text-red-600 font-bold">{availabilityError}</span>}
+                {availablePresensiNumbers?.length === 0 && (
+                  <span className="text-red-600 font-bold">Tidak ada nomor tersedia.</span>
                 )}
               </div>
             </div>
